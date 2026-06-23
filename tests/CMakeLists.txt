@@ -46,3 +46,8 @@ set_target_properties(test_monitorview PROPERTIES AUTOMOC ON)
 target_include_directories(test_monitorview PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_monitorview PRIVATE studio_core Qt6::Test)
 add_test(NAME test_monitorview COMMAND test_monitorview)
+
+add_executable(test_sessionmetadata test_sessionmetadata.cpp)
+set_target_properties(test_sessionmetadata PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessionmetadata PRIVATE studio_core Qt6::Test)
+add_test(NAME test_sessionmetadata COMMAND test_sessionmetadata)
