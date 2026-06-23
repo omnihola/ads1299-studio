@@ -16,3 +16,6 @@
 /recordings/
 *.bdf
 *.edf
+
+# SDD scratch
+/.superpowers/
