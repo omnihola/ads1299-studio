@@ -17,6 +17,7 @@ private slots:
             .withMontage("10-20")
             .withSampleRate(500)
             .withNotes("rest EEG")
+            .withStartTimeUtc("2026-01-01T00:00:00Z")
             .withDeviceConfigSnapshot(config);
 
         // Serialize to JSON
@@ -30,6 +31,7 @@ private slots:
         QCOMPARE(restored.montage(), QString("10-20"));
         QCOMPARE(restored.sampleRate(), 500);
         QCOMPARE(restored.operatorNotes(), QString("rest EEG"));
+        QCOMPARE(restored.startTimeUtc(), QString("2026-01-01T00:00:00Z"));
         QCOMPARE(restored.deviceConfigSnapshot(), config);
 
         // Verify gain array is present (should be all 24 by default)
