@@ -3,6 +3,7 @@
 
 #include <QJsonArray>
 #include <stdexcept>
+#include <array>
 
 namespace studio {
 
@@ -165,6 +166,34 @@ QJsonObject DeviceConfig::toJson() const
     obj["mux"]  = muxArr;
 
     return obj;
+}
+
+// ---------------------------------------------------------------------------
+// registerHexDump — free function
+// ---------------------------------------------------------------------------
+
+QString registerHexDump(const std::array<uint8_t, 23>& bytes)
+{
+    // The 23 registers are at addresses 0x01..0x17 (inclusive).
+    // Register names in address order:
+    static const char* const kNames[23] = {
+        "CONFIG1", "CONFIG2", "CONFIG3", "LOFF",
+        "CH1SET",  "CH2SET",  "CH3SET",  "CH4SET",
+        "CH5SET",  "CH6SET",  "CH7SET",  "CH8SET",
+        "BIAS_SENSP", "BIAS_SENSN", "LOFF_SENSP", "LOFF_SENSN",
+        "LOFF_FLIP", "LOFF_STATP", "LOFF_STATN", "GPIO",
+        "MISC1", "MISC2", "CONFIG4"
+    };
+
+    QStringList tokens;
+    tokens.reserve(23);
+    for (int i = 0; i < 23; ++i) {
+        const uint val = static_cast<uint>(bytes[static_cast<std::size_t>(i)]);
+        // Format: NAME=0xHH  (hex always 2 uppercase digits)
+        const QString hex = QString::number(val, 16).rightJustified(2, QLatin1Char('0')).toUpper();
+        tokens.append(QString("%1=0x%2").arg(QLatin1String(kNames[i])).arg(hex));
+    }
+    return tokens.join(QLatin1Char(' '));
 }
 
 } // namespace studio

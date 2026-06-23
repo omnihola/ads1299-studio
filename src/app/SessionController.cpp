@@ -35,9 +35,10 @@ SessionController::SessionController(IDataSource* source,
 
     elapsedTimer_.start();
 
-    // Register EegFrameBatch so it can cross thread boundaries via a queued
-    // connection (writeBatch is invoked on writerThread_). Idempotent.
+    // Register metatypes so these types can cross thread boundaries via queued
+    // connections. Idempotent.
     qRegisterMetaType<studio::EegFrameBatch>("studio::EegFrameBatch");
+    qRegisterMetaType<studio::DeviceConfig>("studio::DeviceConfig");
 
     // Create the recorder and move it to the dedicated writer thread. The
     // writer thread runs for the controller's lifetime so invokeMethod can
@@ -90,6 +91,31 @@ RingBuffer<EegFrame>& SessionController::displayBuffer()
 }
 
 // ---------------------------------------------------------------------------
+// Device config
+// ---------------------------------------------------------------------------
+
+DeviceConfig SessionController::config() const
+{
+    return config_;
+}
+
+void SessionController::applyConfig(const DeviceConfig& cfg)
+{
+    config_ = cfg;
+    Logger::instance().log("info", "SessionController.applyConfig",
+                           QJsonObject{{"sampleRate", cfg.sampleRate()}});
+
+    // Forward sample rate to the source on the worker thread (non-blocking).
+    QMetaObject::invokeMethod(source_,
+        [this, sps = cfg.sampleRate()]() {
+            source_->setSampleRate(sps);
+        },
+        Qt::QueuedConnection);
+
+    emit configChanged(cfg);
+}
+
+// ---------------------------------------------------------------------------
 // Public slots
 // ---------------------------------------------------------------------------
 
@@ -131,11 +157,17 @@ bool SessionController::startRecording(const QString& basePath,
         return false;
     }
 
+    // Snapshot the current device config into the metadata so the recording
+    // captures the real hardware configuration (not the caller's default).
+    const SessionMetadata effectiveMeta = meta
+        .withDeviceConfigSnapshot(config_.toJson())
+        .withSampleRate(config_.sampleRate());
+
     // Open the recorder ON the writer thread and capture the result.
     bool opened = false;
     QMetaObject::invokeMethod(recorder_,
-        [this, &basePath, &meta, &opened]() {
-            opened = recorder_->open(basePath, meta);
+        [this, &basePath, &effectiveMeta, &opened]() {
+            opened = recorder_->open(basePath, effectiveMeta);
         },
         Qt::BlockingQueuedConnection);
 
@@ -150,7 +182,8 @@ bool SessionController::startRecording(const QString& basePath,
     setState(State::Recording);
     emit recordingChanged(true);
     Logger::instance().log("info", "SessionController.startRecording",
-                           QJsonObject{{"basePath", basePath}});
+                           QJsonObject{{"basePath", basePath},
+                                       {"sampleRate", config_.sampleRate()}});
     return true;
 }
 

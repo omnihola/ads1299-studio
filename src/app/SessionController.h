@@ -23,6 +23,7 @@
 
 #include "app/AppState.h"
 #include "core/acquisition/IDataSource.h"
+#include "core/device/DeviceConfig.h"
 #include "core/dsp/RingBuffer.h"
 #include "core/recording/Recorder.h"
 #include "core/recording/SessionMetadata.h"
@@ -53,6 +54,10 @@ public:
     // can drive seq-gap logic directly without starting the worker thread.
     void onFrames(const EegFrameBatch& batch);
 
+    // ---- Device config -----------------------------------------------------
+    DeviceConfig config() const;
+    void applyConfig(const DeviceConfig& cfg);
+
     // ---- Recording lifecycle ----------------------------------------------
     // Returns false if not currently Streaming or if the recorder fails to open.
     // On success sets state to Recording, starts the record clock, and emits
@@ -71,6 +76,7 @@ signals:
     void stateChanged(studio::State state);
     void errorOccurred(QString message);
     void recordingChanged(bool recording);
+    void configChanged(studio::DeviceConfig config);
 
 private slots:
     void onSourceError(const QString& message);
@@ -98,6 +104,9 @@ private:
     // Metrics helpers
     QElapsedTimer         elapsedTimer_;
     uint64_t              samplesSeen_   = 0;
+
+    // Device configuration
+    DeviceConfig          config_;
 
     // Session state — atomic so state() is safe to call from any thread.
     std::atomic<State>    state_         {State::Idle};

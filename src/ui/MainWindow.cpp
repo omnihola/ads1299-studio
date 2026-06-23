@@ -23,6 +23,7 @@
 #include "core/acquisition/SimulatedSource.h"
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
+#include "ui/RegistersView.h"
 
 namespace studio {
 
@@ -146,8 +147,13 @@ void MainWindow::buildTabs()
     monitorView->setObjectName("monitorTab");
     tabs_->addTab(monitorView, "Monitor");
 
-    // Placeholder tabs for future tasks (Recording is now a real panel)
-    const QStringList placeholderTabs = { "Registers", "Impedance", "Spectrum" };
+    // Registers tab — live DeviceConfig editor
+    auto* registersView = new RegistersView(controller_, this);
+    registersView->setObjectName("registersTab");
+    tabs_->addTab(registersView, "Registers");
+
+    // Placeholder tabs for future tasks
+    const QStringList placeholderTabs = { "Impedance", "Spectrum" };
     for (const auto& name : placeholderTabs) {
         auto* placeholder = new QWidget();
         placeholder->setObjectName(name.toLower() + "Tab");

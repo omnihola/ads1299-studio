@@ -2,6 +2,8 @@
 #include <array>
 #include <cstdint>
 #include <QJsonObject>
+#include <QMetaType>
+#include <QString>
 
 namespace studio {
 
@@ -45,4 +47,11 @@ private:
     bool               m_biasEnabled;
 };
 
+/// Free function: format a 23-byte register block as a human-readable hex string.
+/// Returns e.g. "CONFIG1=0x96 CONFIG2=0xC0 CONFIG3=0xEC ..." (space-separated,
+/// 23 tokens, one per register 0x01..0x17).
+QString registerHexDump(const std::array<uint8_t, 23>& bytes);
+
 } // namespace studio
+
+Q_DECLARE_METATYPE(studio::DeviceConfig)

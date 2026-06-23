@@ -72,3 +72,8 @@ add_executable(test_deviceconfig test_deviceconfig.cpp)
 set_target_properties(test_deviceconfig PROPERTIES AUTOMOC ON)
 target_link_libraries(test_deviceconfig PRIVATE studio_core Qt6::Test)
 add_test(NAME test_deviceconfig COMMAND test_deviceconfig)
+
+add_executable(test_registerhexdump test_registerhexdump.cpp)
+set_target_properties(test_registerhexdump PROPERTIES AUTOMOC ON)
+target_link_libraries(test_registerhexdump PRIVATE studio_core Qt6::Test)
+add_test(NAME test_registerhexdump COMMAND test_registerhexdump)
