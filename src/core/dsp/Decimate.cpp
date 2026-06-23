@@ -9,24 +9,32 @@
 
 namespace studio {
 
-QVector<double> decimateMinMax(const QVector<double>& samples, int maxPoints)
+DecimatedSeries decimateMinMaxIndexed(const QVector<double>& samples, int maxPoints)
 {
     // Guards
     if (maxPoints <= 0 || samples.isEmpty()) {
         return {};
     }
 
+    const int n = samples.size();
+
     // Copy-through when already small enough
-    if (samples.size() <= maxPoints) {
-        return samples;
+    if (n <= maxPoints) {
+        DecimatedSeries s;
+        s.values  = samples;
+        s.indices.resize(n);
+        for (int i = 0; i < n; ++i) {
+            s.indices[i] = i;
+        }
+        return s;
     }
 
     // Number of buckets: each bucket contributes up to 2 output values [min, max]
     const int bucketCount = std::max(1, maxPoints / 2);
-    const int n           = samples.size();
 
-    QVector<double> result;
-    result.reserve(bucketCount * 2);
+    DecimatedSeries s;
+    s.values.reserve(bucketCount * 2);
+    s.indices.reserve(bucketCount * 2);
 
     for (int b = 0; b < bucketCount; ++b) {
         // Compute slice [start, end) for this bucket
@@ -51,15 +59,26 @@ QVector<double> decimateMinMax(const QVector<double>& samples, int maxPoints)
 
         // Emit in index order so the waveform envelope follows the original signal
         if (minIdx <= maxIdx) {
-            result.append(minVal);
-            result.append(maxVal);
+            s.values.append(minVal);  s.indices.append(minIdx);
+            s.values.append(maxVal);  s.indices.append(maxIdx);
         } else {
-            result.append(maxVal);
-            result.append(minVal);
+            s.values.append(maxVal);  s.indices.append(maxIdx);
+            s.values.append(minVal);  s.indices.append(minIdx);
         }
     }
 
-    return result;
+    // Fix 2: guarantee output never exceeds maxPoints
+    if (s.values.size() > maxPoints) {
+        s.values.resize(maxPoints);
+        s.indices.resize(maxPoints);
+    }
+
+    return s;
+}
+
+QVector<double> decimateMinMax(const QVector<double>& samples, int maxPoints)
+{
+    return decimateMinMaxIndexed(samples, maxPoints).values;
 }
 
 } // namespace studio

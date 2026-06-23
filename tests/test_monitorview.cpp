@@ -94,6 +94,55 @@ private slots:
         const auto result = studio::decimateMinMax(empty, 1000);
         QVERIFY(result.isEmpty());
     }
+
+    // 7. decimateMinMaxIndexed: sizes match, indices in-range and non-decreasing,
+    //    and values[k] == samples[indices[k]] for every k.
+    void decimateMinMaxIndexed_indicesConsistent()
+    {
+        const int N = 10000;
+        QVector<double> samples(N);
+        for (int i = 0; i < N; ++i) {
+            samples[i] = std::sin(2.0 * M_PI * i / 250.0) * 100.0;
+        }
+
+        const auto d = studio::decimateMinMaxIndexed(samples, 1000);
+
+        QVERIFY2(d.values.size() == d.indices.size(),
+                 qPrintable(QString("values.size()=%1 != indices.size()=%2")
+                            .arg(d.values.size()).arg(d.indices.size())));
+        QVERIFY2(d.values.size() <= 1000,
+                 qPrintable(QString("output size %1 exceeds maxPoints 1000").arg(d.values.size())));
+
+        for (int k = 0; k < d.indices.size(); ++k) {
+            QVERIFY2(d.indices[k] >= 0 && d.indices[k] < N,
+                     qPrintable(QString("index[%1]=%2 out of range [0,%3)")
+                                .arg(k).arg(d.indices[k]).arg(N)));
+            if (k > 0) {
+                QVERIFY2(d.indices[k] >= d.indices[k - 1],
+                         qPrintable(QString("indices not non-decreasing at k=%1: %2 < %3")
+                                    .arg(k).arg(d.indices[k]).arg(d.indices[k - 1])));
+            }
+            QVERIFY2(d.values[k] == samples[d.indices[k]],
+                     qPrintable(QString("values[%1]=%2 != samples[indices[%1]]=%3")
+                                .arg(k).arg(d.values[k]).arg(samples[d.indices[k]])));
+        }
+    }
+
+    // 8. maxPoints==1: both decimateMinMax and decimateMinMaxIndexed.values
+    //    must return at most 1 element.
+    void decimateMaxPointsOne_clampsBothFunctions()
+    {
+        QVector<double> samples = {1.0, 2.0, 3.0, 4.0, 5.0};
+
+        const auto plain   = studio::decimateMinMax(samples, 1);
+        QVERIFY2(plain.size() <= 1,
+                 qPrintable(QString("decimateMinMax result size %1 > 1").arg(plain.size())));
+
+        const auto indexed = studio::decimateMinMaxIndexed(samples, 1);
+        QVERIFY2(indexed.values.size() <= 1,
+                 qPrintable(QString("decimateMinMaxIndexed values size %1 > 1")
+                            .arg(indexed.values.size())));
+    }
 };
 
 QTEST_MAIN(TestDecimate)

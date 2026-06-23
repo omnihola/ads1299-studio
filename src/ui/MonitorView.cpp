@@ -98,12 +98,18 @@ void MonitorView::onRenderTick()
         return;
     }
 
-    // Trim samples outside the time window
+    // Trim samples outside the time window — O(n) bulk removal
     const double windowStart = currentTimeSec_ - kWindowSeconds;
-    while (!timeSamples_.isEmpty() && timeSamples_.first() < windowStart) {
-        timeSamples_.removeFirst();
-        for (int c = 0; c < kNumChannels; ++c) {
-            channelSamples_[c].removeFirst();
+    {
+        int trimCount = 0;
+        while (trimCount < timeSamples_.size() && timeSamples_[trimCount] < windowStart) {
+            ++trimCount;
+        }
+        if (trimCount > 0) {
+            timeSamples_.remove(0, trimCount);
+            for (int c = 0; c < kNumChannels; ++c) {
+                channelSamples_[c].remove(0, trimCount);
+            }
         }
     }
 
@@ -125,51 +131,19 @@ void MonitorView::onRenderTick()
             continue;
         }
 
-        // Decimate y values; apply same decimation index selection to t
+        // Decimate y values using index-based algorithm so t is derived
+        // from the exact same source indices — no desync possible.
         const int n = tVec.size();
         if (n <= maxPoints) {
             // No decimation needed
             graphs_[c]->setData(tVec, yVec, /*alreadySorted=*/true);
         } else {
-            // Decimate via min/max envelope; rebuild corresponding t vector
-            const QVector<double> decimatedY = decimateMinMax(yVec, maxPoints);
-
-            // Reconstruct matching t values by computing bucket indices
-            const int bucketCount = std::max(1, maxPoints / 2);
-            QVector<double> decimatedT;
-            decimatedT.reserve(decimatedY.size());
-
-            for (int b = 0; b < bucketCount; ++b) {
-                const int start = (b * n) / bucketCount;
-                const int end   = ((b + 1) * n) / bucketCount;
-                if (start >= end) continue;
-
-                // Find min/max indices within slice (mirrors Decimate.cpp logic)
-                int    minIdx = start;
-                int    maxIdx = start;
-                double minVal = yVec[start];
-                double maxVal = yVec[start];
-
-                for (int i = start + 1; i < end; ++i) {
-                    const double v = yVec[i];
-                    if (v < minVal) { minVal = v; minIdx = i; }
-                    if (v > maxVal) { maxVal = v; maxIdx = i; }
-                }
-
-                if (minIdx <= maxIdx) {
-                    decimatedT.append(tVec[minIdx]);
-                    decimatedT.append(tVec[maxIdx]);
-                } else {
-                    decimatedT.append(tVec[maxIdx]);
-                    decimatedT.append(tVec[minIdx]);
-                }
+            const DecimatedSeries d = decimateMinMaxIndexed(yVec, maxPoints);
+            QVector<double> decimatedT(d.indices.size());
+            for (int k = 0; k < d.indices.size(); ++k) {
+                decimatedT[k] = tVec[d.indices[k]];
             }
-
-            // Trim to same length in case of rounding discrepancies
-            const int outSize = std::min(decimatedT.size(), decimatedY.size());
-            graphs_[c]->setData(decimatedT.mid(0, outSize),
-                                decimatedY.mid(0, outSize),
-                                /*alreadySorted=*/true);
+            graphs_[c]->setData(decimatedT, d.values, /*alreadySorted=*/true);
         }
     }
 
