@@ -90,6 +90,25 @@ RingBuffer<EegFrame>& SessionController::displayBuffer()
     return displayBuffer_;
 }
 
+QVector<double> SessionController::recentSamples(int channel, int maxCount) const
+{
+    if (channel < 0 || channel >= 8) {
+        return {};
+    }
+    QMutexLocker lock(&recentMutex_);
+    const auto& dq = recent_[static_cast<size_t>(channel)];
+    const int available = static_cast<int>(dq.size());
+    const int count = std::min(available, maxCount);
+    QVector<double> result;
+    result.reserve(count);
+    // Return the most-recent `count` samples in chronological (oldest→newest) order.
+    const int start = available - count;
+    for (int i = start; i < available; ++i) {
+        result.push_back(dq[static_cast<size_t>(i)]);
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // Device config
 // ---------------------------------------------------------------------------
@@ -269,6 +288,19 @@ void SessionController::onFrames(const EegFrameBatch& batch)
 
         // --- Push to display ring buffer ---
         displayBuffer_.push(frame);
+
+        // --- Update rolling history for SpectrumView (non-destructive) ---
+        {
+            QMutexLocker lock(&recentMutex_);
+            for (int c = 0; c < 8; ++c) {
+                recent_[static_cast<size_t>(c)].push_back(
+                    static_cast<double>(frame.ch[c]));
+                if (static_cast<int>(recent_[static_cast<size_t>(c)].size())
+                        > kRecentCapacity) {
+                    recent_[static_cast<size_t>(c)].pop_front();
+                }
+            }
+        }
 
         // --- SPS accounting ---
         ++samplesSeen_;

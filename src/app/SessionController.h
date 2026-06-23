@@ -14,11 +14,15 @@
 //   state_ is std::atomic<State> so state() may be called safely from any
 //   thread (consistent with droppedSamples()).
 
+#include <QMutex>
 #include <QObject>
 #include <QThread>
 #include <QElapsedTimer>
+#include <QVector>
+#include <array>
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <memory>
 
 #include "app/AppState.h"
@@ -57,6 +61,12 @@ public:
     // ---- Device config -----------------------------------------------------
     DeviceConfig config() const;
     void applyConfig(const DeviceConfig& cfg);
+
+    // ---- Per-channel rolling history (non-destructive, for SpectrumView) ---
+    // Returns up to @p maxCount most-recent samples for @p channel (0-based),
+    // in chronological order (oldest→newest). Thread-safe.
+    // Returns empty QVector for out-of-range channel.
+    QVector<double> recentSamples(int channel, int maxCount) const;
 
     // ---- Recording lifecycle ----------------------------------------------
     // Returns false if not currently Streaming or if the recorder fails to open.
@@ -110,6 +120,12 @@ private:
 
     // Session state — atomic so state() is safe to call from any thread.
     std::atomic<State>    state_         {State::Idle};
+
+    // Per-channel rolling history (non-destructive snapshot for SpectrumView).
+    // Capped at kRecentCapacity samples per channel.
+    static constexpr int kRecentCapacity = 16384;
+    mutable QMutex                        recentMutex_;
+    std::array<std::deque<double>, 8>     recent_;
 };
 
 } // namespace studio

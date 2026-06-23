@@ -25,6 +25,7 @@
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
 #include "ui/RegistersView.h"
+#include "ui/SpectrumView.h"
 
 namespace studio {
 
@@ -158,10 +159,10 @@ void MainWindow::buildTabs()
     impedanceView_->setObjectName("impedanceTab");
     tabs_->addTab(impedanceView_, "Impedance");
 
-    // Placeholder tab for future tasks
-    auto* spectrumPlaceholder = new QWidget();
-    spectrumPlaceholder->setObjectName("spectrumTab");
-    tabs_->addTab(spectrumPlaceholder, "Spectrum");
+    // Spectrum tab — live power-spectrum display
+    auto* spectrumView = new SpectrumView(controller_, this);
+    spectrumView->setObjectName("spectrumTab");
+    tabs_->addTab(spectrumView, "Spectrum");
 
     // Recording tab — real RecordingPanel wired to the controller.
     recordingPanel_ = new RecordingPanel(controller_, this);

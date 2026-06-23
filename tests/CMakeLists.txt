@@ -87,3 +87,8 @@ add_executable(test_impedancelog test_impedancelog.cpp)
 set_target_properties(test_impedancelog PROPERTIES AUTOMOC ON)
 target_link_libraries(test_impedancelog PRIVATE studio_core Qt6::Test)
 add_test(NAME test_impedancelog COMMAND test_impedancelog)
+
+add_executable(test_fftprocessor test_fftprocessor.cpp)
+set_target_properties(test_fftprocessor PROPERTIES AUTOMOC ON)
+target_link_libraries(test_fftprocessor PRIVATE studio_core Qt6::Test)
+add_test(NAME test_fftprocessor COMMAND test_fftprocessor)
