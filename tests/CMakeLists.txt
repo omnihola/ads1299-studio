@@ -28,3 +28,8 @@ add_executable(test_logger test_logger.cpp)
 set_target_properties(test_logger PROPERTIES AUTOMOC ON)
 target_link_libraries(test_logger PRIVATE studio_core Qt6::Test)
 add_test(NAME test_logger COMMAND test_logger)
+
+add_executable(test_sessioncontroller test_sessioncontroller.cpp)
+set_target_properties(test_sessioncontroller PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessioncontroller PRIVATE studio_core Qt6::Test)
+add_test(NAME test_sessioncontroller COMMAND test_sessioncontroller)
