@@ -92,3 +92,8 @@ add_executable(test_fftprocessor test_fftprocessor.cpp)
 set_target_properties(test_fftprocessor PROPERTIES AUTOMOC ON)
 target_link_libraries(test_fftprocessor PRIVATE studio_core Qt6::Test)
 add_test(NAME test_fftprocessor COMMAND test_fftprocessor)
+
+add_executable(test_frameparser test_frameparser.cpp)
+set_target_properties(test_frameparser PROPERTIES AUTOMOC ON)
+target_link_libraries(test_frameparser PRIVATE studio_core Qt6::Test)
+add_test(NAME test_frameparser COMMAND test_frameparser)
