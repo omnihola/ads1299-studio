@@ -77,3 +77,8 @@ add_executable(test_registerhexdump test_registerhexdump.cpp)
 set_target_properties(test_registerhexdump PROPERTIES AUTOMOC ON)
 target_link_libraries(test_registerhexdump PRIVATE studio_core Qt6::Test)
 add_test(NAME test_registerhexdump COMMAND test_registerhexdump)
+
+add_executable(test_iirfilter test_iirfilter.cpp)
+set_target_properties(test_iirfilter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_iirfilter PRIVATE studio_core Qt6::Test)
+add_test(NAME iirfilter COMMAND test_iirfilter)
