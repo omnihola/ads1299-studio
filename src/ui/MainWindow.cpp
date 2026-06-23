@@ -18,6 +18,7 @@
 
 #include "app/SessionController.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "ui/MonitorView.h"
 
 namespace studio {
 
@@ -109,8 +110,14 @@ void MainWindow::buildTabs()
     tabs_->setObjectName("centralTabs");
     tabs_->setDocumentMode(true);
 
-    const QStringList tabNames = { "Monitor", "Registers", "Impedance", "Spectrum", "Recording" };
-    for (const auto& name : tabNames) {
+    // Monitor tab — real-time 8-channel scrolling traces
+    auto* monitorView = new MonitorView(controller_, this);
+    monitorView->setObjectName("monitorTab");
+    tabs_->addTab(monitorView, "Monitor");
+
+    // Placeholder tabs for future tasks
+    const QStringList placeholderTabs = { "Registers", "Impedance", "Spectrum", "Recording" };
+    for (const auto& name : placeholderTabs) {
         auto* placeholder = new QWidget();
         placeholder->setObjectName(name.toLower() + "Tab");
         tabs_->addTab(placeholder, name);
