@@ -140,6 +140,60 @@ private slots:
         bool result = recorder.open("", meta);
         QVERIFY(!result);
     }
+
+    void metaJsonWrittenOnOpen() {
+        QTemporaryDir tmpDir;
+        QVERIFY(tmpDir.isValid());
+
+        const int kSampleRate = 256;
+
+        auto meta = SessionMetadata()
+            .withSubjectId("S_META")
+            .withSampleRate(kSampleRate);
+
+        QString basePath = tmpDir.filePath("rec_meta");
+
+        Recorder recorder;
+        QVERIFY(recorder.open(basePath, meta));
+
+        // Before writing any data, read the .meta.json and verify totalSamplesPerChannel exists
+        QString metaPath = basePath + ".meta.json";
+        QVERIFY2(QFile::exists(metaPath), "meta.json missing immediately after open");
+
+        QFile metaFile(metaPath);
+        QVERIFY(metaFile.open(QIODevice::ReadOnly));
+        auto doc = QJsonDocument::fromJson(metaFile.readAll());
+        metaFile.close();
+        QVERIFY(!doc.isNull());
+
+        QJsonObject obj = doc.object();
+        QVERIFY2(obj.contains("totalSamplesPerChannel"), "totalSamplesPerChannel missing in on-open meta.json");
+        QCOMPARE(obj["totalSamplesPerChannel"].toInt(), 0); // Should be 0 before any writes
+
+        recorder.close();
+    }
+
+    void doubleOpenReturnsFalse() {
+        QTemporaryDir tmpDir;
+        QVERIFY(tmpDir.isValid());
+
+        const int kSampleRate = 256;
+
+        auto meta = SessionMetadata()
+            .withSubjectId("S_DOUBLE")
+            .withSampleRate(kSampleRate);
+
+        QString basePath = tmpDir.filePath("rec_double");
+
+        Recorder recorder;
+        QVERIFY(recorder.open(basePath, meta));
+
+        // Try to open again while already open
+        bool result = recorder.open(basePath + "_2", meta);
+        QVERIFY(!result);
+
+        recorder.close();
+    }
 };
 
 QTEST_MAIN(TestRecorder)

@@ -43,6 +43,12 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
         return false;
     }
 
+    if (isOpen_) {
+        emit errorOccurred("Recorder::open — recorder is already open");
+        Logger::instance().log("error", "recorder.open.already_open", {});
+        return false;
+    }
+
     meta_        = meta;
     basePath_    = basePath;
     sampleRate_  = meta.sampleRate();
@@ -250,10 +256,7 @@ void Recorder::writeMetaJson(bool isFinal)
 
     obj["bdfFile"] = QFileInfo(basePath_ + ".bdf").fileName();
     obj["csvFile"] = QFileInfo(basePath_ + ".csv").fileName();
-
-    if (isFinal) {
-        obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
-    }
+    obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
 
     QString metaPath = basePath_ + ".meta.json";
     QFile f(metaPath);
