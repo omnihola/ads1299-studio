@@ -27,6 +27,7 @@
 
 #include "app/AppState.h"
 #include "core/acquisition/IDataSource.h"
+#include "core/acquisition/SerialSource.h"
 #include "core/device/DeviceConfig.h"
 #include "core/dsp/RingBuffer.h"
 #include "core/recording/Recorder.h"
@@ -76,6 +77,18 @@ public:
     void     stopRecording();
     void     addMarker(const QString& label);
     quint64  recordedSamples() const;  // 0 unless currently Recording
+
+    // ---- Source swap -------------------------------------------------------
+    // Swap to a new IDataSource at runtime (e.g. switching from Simulated to
+    // Serial). If streaming, stopStreaming() is called first. The OLD source is
+    // safely destroyed on its own thread; the NEW source is moved to the
+    // (restarted) workerThread_.  Does NOT auto-start; call startStreaming().
+    void setSource(IDataSource* newSource);
+
+    // Convenience: create a SerialSource, open portName, and if successful call
+    // setSource(). Returns true on success.  On failure, deletes the source and
+    // returns false. Logs the outcome.
+    bool connectSerial(const QString& portName, int baud = 921600);
 
 public slots:
     void startStreaming();

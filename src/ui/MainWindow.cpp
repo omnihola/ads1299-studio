@@ -7,6 +7,7 @@
 #include <QAction>
 #include <QDockWidget>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -20,6 +21,7 @@
 #include <QSignalBlocker>
 
 #include "app/SessionController.h"
+#include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
 #include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
@@ -101,6 +103,30 @@ void MainWindow::buildToolbar()
     toolbar->addAction(recordAction_);
 
     connect(startAction_, &QAction::toggled, this, &MainWindow::onStartToggled);
+
+    // Connect action: list available serial ports and swap the active source.
+    connect(connectAction_, &QAction::triggered, this, [this]() {
+        const QStringList ports = SerialSource::availablePorts();
+        if (ports.isEmpty()) {
+            statusBar()->showMessage("No serial ports found", 4000);
+            return;
+        }
+        bool ok = false;
+        const QString port = QInputDialog::getItem(
+            this, "Connect to Device", "Select serial port:", ports,
+            /*current=*/0, /*editable=*/false, &ok);
+        if (!ok || port.isEmpty()) return;
+
+        const bool connected = controller_->connectSerial(port);
+        if (connected) {
+            linkLed_->setStatus(LedIndicator::Status::Ok);
+            statusBar()->showMessage(QString("Connected to %1").arg(port), 4000);
+        } else {
+            linkLed_->setStatus(LedIndicator::Status::Error);
+            statusBar()->showMessage(
+                QString("Failed to open %1").arg(port), 5000);
+        }
+    });
 
     // Toolbar Record toggles the RecordingPanel's record/stop. The panel is
     // built later (buildTabs); the lambda dereferences recordingPanel_ only

@@ -1,5 +1,6 @@
 // src/app/SessionController.cpp
 #include "app/SessionController.h"
+#include "core/acquisition/SerialSource.h"
 #include "core/logging/Logger.h"
 
 #include <QJsonObject>
@@ -162,6 +163,65 @@ void SessionController::stopStreaming()
 
     setState(State::Idle);
     Logger::instance().log("info", "SessionController.stopStreaming", {});
+}
+
+// ---------------------------------------------------------------------------
+// Source swap
+// ---------------------------------------------------------------------------
+
+void SessionController::setSource(IDataSource* newSource)
+{
+    Q_ASSERT(newSource);
+
+    // 1. Stop streaming if currently active.
+    if (state_ != State::Idle) {
+        stopStreaming();
+    }
+
+    // 2. Disconnect the old source's signals from this controller.
+    IDataSource* oldSource = source_;
+    disconnect(oldSource, &IDataSource::framesReady,
+               this,      &SessionController::onFrames);
+    disconnect(oldSource, &IDataSource::errorOccurred,
+               this,      &SessionController::onSourceError);
+
+    // 3. Destroy the old source safely.
+    //    workerThread_ is NOT running at this point (stopStreaming() quit it).
+    //    Move the old source back to this object's thread so deleteLater()
+    //    runs on the controller thread's event loop (safe, no race).
+    oldSource->moveToThread(this->thread());
+    oldSource->deleteLater();
+
+    // 4. Wire the new source onto the worker thread.
+    newSource->setParent(nullptr);
+    newSource->moveToThread(&workerThread_);
+
+    connect(newSource, &IDataSource::framesReady,
+            this,      &SessionController::onFrames,
+            Qt::QueuedConnection);
+    connect(newSource, &IDataSource::errorOccurred,
+            this,      &SessionController::onSourceError,
+            Qt::QueuedConnection);
+
+    source_ = newSource;
+
+    Logger::instance().log("info", "SessionController.setSource",
+                           QJsonObject{{"name", newSource->capabilities().name}});
+}
+
+bool SessionController::connectSerial(const QString& portName, int baud)
+{
+    auto* serial = new SerialSource();
+    if (!serial->openPort(portName, baud)) {
+        delete serial;
+        Logger::instance().log("warn", "SessionController.connectSerial.failed",
+                               QJsonObject{{"port", portName}});
+        return false;
+    }
+    setSource(serial);
+    Logger::instance().log("info", "SessionController.connectSerial",
+                           QJsonObject{{"port", portName}, {"baud", baud}});
+    return true;
 }
 
 // ---------------------------------------------------------------------------

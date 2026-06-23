@@ -97,3 +97,8 @@ add_executable(test_frameparser test_frameparser.cpp)
 set_target_properties(test_frameparser PROPERTIES AUTOMOC ON)
 target_link_libraries(test_frameparser PRIVATE studio_core Qt6::Test)
 add_test(NAME test_frameparser COMMAND test_frameparser)
+
+add_executable(test_serialsource test_serialsource.cpp)
+set_target_properties(test_serialsource PROPERTIES AUTOMOC ON)
+target_link_libraries(test_serialsource PRIVATE studio_core Qt6::Test)
+add_test(NAME test_serialsource COMMAND test_serialsource)
