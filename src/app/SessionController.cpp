@@ -38,8 +38,10 @@ SessionController::SessionController(IDataSource* source,
 SessionController::~SessionController()
 {
     // Ensure the source is stopped and the thread is cleaned up.
+    // source_ lives on workerThread_, so we must invoke stop() via a queued
+    // call rather than calling it directly (which would be a data race).
     if (workerThread_.isRunning()) {
-        source_->stop();
+        QMetaObject::invokeMethod(source_, &IDataSource::stop, Qt::BlockingQueuedConnection);
         workerThread_.quit();
         workerThread_.wait();
     }
@@ -51,7 +53,7 @@ SessionController::~SessionController()
 
 State SessionController::state() const
 {
-    return state_;
+    return state_.load(std::memory_order_relaxed);
 }
 
 uint64_t SessionController::droppedSamples() const
@@ -106,20 +108,33 @@ void SessionController::onFrames(const EegFrameBatch& batch)
             // First frame seen: initialise the counter — no drop counted.
             expectedSeq_ = frame.seq;
             firstFrame_  = false;
-        } else if (frame.seq > expectedSeq_) {
-            // Gap detected: (frame.seq - expectedSeq_) samples are missing.
-            uint64_t gap = static_cast<uint64_t>(frame.seq - expectedSeq_);
-            droppedSamples_.fetch_add(gap, std::memory_order_relaxed);
+            // Advance past this first frame.
+            expectedSeq_ = static_cast<uint64_t>(frame.seq) + 1;
+        } else if (frame.seq >= expectedSeq_) {
+            if (frame.seq > expectedSeq_) {
+                // Gap detected: (frame.seq - expectedSeq_) samples are missing.
+                uint64_t gap = static_cast<uint64_t>(frame.seq - expectedSeq_);
+                droppedSamples_.fetch_add(gap, std::memory_order_relaxed);
 
-            Logger::instance().log("warn", "SessionController.seqGap",
+                Logger::instance().log("warn", "SessionController.seqGap",
+                    QJsonObject{
+                        {"expected", static_cast<qint64>(expectedSeq_)},
+                        {"received", static_cast<qint64>(frame.seq)},
+                        {"gap",      static_cast<qint64>(gap)}
+                    });
+            }
+            // Advance the counter past the frame we just processed.
+            expectedSeq_ = static_cast<uint64_t>(frame.seq) + 1;
+        } else {
+            // Retrograde / duplicate frame: seq < expectedSeq_.
+            // Do NOT advance expectedSeq_ — that would make the next normal
+            // frame look like a huge spurious gap.
+            Logger::instance().log("warn", "retrograde_seq",
                 QJsonObject{
-                    {"expected", static_cast<qint64>(expectedSeq_)},
-                    {"received", static_cast<qint64>(frame.seq)},
-                    {"gap",      static_cast<qint64>(gap)}
+                    {"seq",      static_cast<qint64>(frame.seq)},
+                    {"expected", static_cast<qint64>(expectedSeq_)}
                 });
         }
-        // Always advance the counter past the frame we just processed.
-        expectedSeq_ = static_cast<uint64_t>(frame.seq) + 1;
 
         // --- Push to display ring buffer ---
         displayBuffer_.push(frame);
@@ -155,8 +170,8 @@ void SessionController::onSourceError(const QString& message)
 
 void SessionController::setState(State s)
 {
-    if (state_ == s) return;
-    state_ = s;
+    if (state_.load(std::memory_order_relaxed) == s) return;
+    state_.store(s, std::memory_order_relaxed);
     emit stateChanged(s);
 }
 

@@ -11,6 +11,8 @@
 //   read it via droppedSamples() while onFrames() (on the controller thread)
 //   updates it.  expectedSeq_ is only ever accessed from onFrames() so no
 //   synchronization is needed there.
+//   state_ is std::atomic<State> so state() may be called safely from any
+//   thread (consistent with droppedSamples()).
 
 #include <QObject>
 #include <QThread>
@@ -39,7 +41,7 @@ public:
     ~SessionController() override;
 
     // ---- State / metrics --------------------------------------------------
-    State    state()          const;
+    State    state()          const;      // may be called from any thread
     uint64_t droppedSamples() const;      // may be called from any thread
     RingBuffer<EegFrame>& displayBuffer();
 
@@ -78,8 +80,8 @@ private:
     QElapsedTimer         elapsedTimer_;
     uint64_t              samplesSeen_   = 0;
 
-    // Session state
-    State                 state_         = State::Idle;
+    // Session state — atomic so state() is safe to call from any thread.
+    std::atomic<State>    state_         {State::Idle};
 };
 
 } // namespace studio

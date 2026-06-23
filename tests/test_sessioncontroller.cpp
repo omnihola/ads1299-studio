@@ -101,6 +101,33 @@ private slots:
         studio::SessionController ctrl(new studio::SimulatedSource(5));
         QCOMPARE(ctrl.state(), studio::State::Idle);
     }
+
+    // -----------------------------------------------------------------------
+    // Test 6: retrograde frame does not count as a drop and does not corrupt
+    //         expectedSeq_ so that the next in-order frame looks like a gap.
+    //
+    // Sequence:
+    //   Batch A: 10, 11, 12  → expectedSeq_ = 13, droppedSamples = 0
+    //   Batch B: 11 (retro), 13 (exact match)
+    //            - seq 11 < 13 → retrograde, NOT a drop, expectedSeq_ stays 13
+    //            - seq 13 == 13 → no gap, expectedSeq_ → 14
+    //   Final: droppedSamples == 0
+    // -----------------------------------------------------------------------
+    void test_retrogradeSeqNoDrop()
+    {
+        studio::SessionController ctrl(new studio::SimulatedSource(6));
+
+        // Establish baseline: seq 10, 11, 12 → expectedSeq_ = 13
+        ctrl.onFrames(makeBatch({10, 11, 12}));
+        QCOMPARE(ctrl.droppedSamples(), uint64_t(0));
+
+        // Retrograde seq 11 followed by forward seq 13 (exactly expected).
+        ctrl.onFrames(makeBatch({11, 13}));
+
+        // Retrograde must not be counted as a drop, and seq 13 == expectedSeq_
+        // so no gap is detected either.
+        QCOMPARE(ctrl.droppedSamples(), uint64_t(0));
+    }
 };
 
 QTEST_MAIN(TestSessionController)
