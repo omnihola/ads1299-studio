@@ -23,3 +23,8 @@ add_executable(test_simulatedsource test_simulatedsource.cpp)
 set_target_properties(test_simulatedsource PROPERTIES AUTOMOC ON)
 target_link_libraries(test_simulatedsource PRIVATE studio_core Qt6::Test)
 add_test(NAME test_simulatedsource COMMAND test_simulatedsource)
+
+add_executable(test_logger test_logger.cpp)
+set_target_properties(test_logger PROPERTIES AUTOMOC ON)
+target_link_libraries(test_logger PRIVATE studio_core Qt6::Test)
+add_test(NAME test_logger COMMAND test_logger)
