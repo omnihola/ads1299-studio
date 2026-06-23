@@ -67,3 +67,8 @@ set_target_properties(test_recordinglifecycle PROPERTIES AUTOMOC ON)
 target_link_libraries(test_recordinglifecycle PRIVATE studio_core Qt6::Test)
 add_test(NAME test_recordinglifecycle COMMAND test_recordinglifecycle)
 set_tests_properties(test_recordinglifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_deviceconfig test_deviceconfig.cpp)
+set_target_properties(test_deviceconfig PROPERTIES AUTOMOC ON)
+target_link_libraries(test_deviceconfig PRIVATE studio_core Qt6::Test)
+add_test(NAME test_deviceconfig COMMAND test_deviceconfig)
