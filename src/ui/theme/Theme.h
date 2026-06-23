@@ -18,8 +18,8 @@ inline constexpr const char* kError       = "#f85149";
 inline constexpr const char* kLedOff      = "#484f58";
 
 // ── Font families ─────────────────────────────────────────────────────────────
-inline constexpr const char* kMonoFamily  = "SF Mono, JetBrains Mono, Menlo, monospace";
-inline constexpr const char* kUiFamily    = "-apple-system, Segoe UI, Inter, sans-serif";
+inline constexpr const char* kMonoFamily  = "\"SF Mono\", \"JetBrains Mono\", Menlo, monospace";
+inline constexpr const char* kUiFamily    = "-apple-system, \"Segoe UI\", Inter, sans-serif";
 
 // ── Spacing & geometry ────────────────────────────────────────────────────────
 inline constexpr int kRadius = 6;

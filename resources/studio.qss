@@ -12,7 +12,7 @@
 QWidget {
     background-color: #0e1116;
     color: #e6edf3;
-    font-family: "-apple-system, Segoe UI, Inter, sans-serif";
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
     font-size: 13px;
     selection-background-color: #3fb6ff;
     selection-color: #08121a;
@@ -126,8 +126,7 @@ QPushButton[primary="true"]:hover {
 
 QPushButton#primary:pressed,
 QPushButton[primary="true"]:pressed {
-    background-color: #3fb6ff;
-    opacity: 0.85;
+    background-color: #2f9fe0;
 }
 
 QPushButton#primary:disabled,
@@ -195,7 +194,7 @@ QStatusBar {
 }
 
 QStatusBar QLabel {
-    font-family: "SF Mono, JetBrains Mono, Menlo, monospace";
+    font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
     font-size: 11px;
     color: #8b949e;
     padding: 0 4px;
