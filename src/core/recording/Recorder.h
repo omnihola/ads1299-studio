@@ -7,6 +7,7 @@
 
 #include "core/acquisition/EegFrame.h"
 #include "core/recording/SessionMetadata.h"
+#include "core/recording/AnnotationStore.h"
 
 namespace studio {
 
@@ -62,19 +63,28 @@ public:
     bool open(const QString& basePath, const SessionMetadata& meta);
 
     /**
-     * Appends all frames in \p batch to the recording.
-     * Does nothing and logs silently if the recorder is not open or in error.
-     */
-    void writeBatch(const EegFrameBatch& batch);
-
-    /**
      * Finalises the BDF+ file, flushes and closes the CSV, rewrites meta.json
      * with final statistics.
      */
     void close();
 
+    /**
+     * Buffers an annotation (event marker). Annotations are written into the
+     * BDF+ file and meta.json when close() is called. Reset on each open().
+     */
+    void addAnnotation(double onsetSec, const QString& label);
+
     bool    isOpen()         const { return isOpen_; }
     quint64 samplesWritten() const { return samplesWritten_; }
+
+public slots:
+    /**
+     * Appends all frames in \p batch to the recording. A slot so it can be
+     * dispatched onto the recorder's writer thread via a queued
+     * QMetaObject::invokeMethod from SessionController::onFrames.
+     * Does nothing and logs silently if the recorder is not open or in error.
+     */
+    void writeBatch(const EegFrameBatch& batch);
 
 signals:
     void errorOccurred(const QString& message);
@@ -95,6 +105,7 @@ private:
     // Session info
     SessionMetadata meta_;
     QString         basePath_;
+    AnnotationStore annotations_;
     int             sampleRate_    = 0;
     static constexpr int kChannels = 8;
 

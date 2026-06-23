@@ -15,10 +15,14 @@
 #include <QWidget>
 #include <QDir>
 #include <QStorageInfo>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QSignalBlocker>
 
 #include "app/SessionController.h"
 #include "core/acquisition/SimulatedSource.h"
 #include "ui/MonitorView.h"
+#include "ui/RecordingPanel.h"
 
 namespace studio {
 
@@ -53,6 +57,13 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
     diskTimer_->setInterval(5000);
     connect(diskTimer_, &QTimer::timeout, this, &MainWindow::refreshDiskLabel);
     diskTimer_->start();
+
+    // Global "M" shortcut — drops an event marker (only acts while recording;
+    // SessionController::addMarker is a no-op otherwise).
+    auto* markerShortcut = new QShortcut(QKeySequence(Qt::Key_M), this);
+    connect(markerShortcut, &QShortcut::activated, this, [this]() {
+        controller_->addMarker("marker");
+    });
 }
 
 MainWindow::~MainWindow() = default;
@@ -87,6 +98,26 @@ void MainWindow::buildToolbar()
     toolbar->addAction(recordAction_);
 
     connect(startAction_, &QAction::toggled, this, &MainWindow::onStartToggled);
+
+    // Toolbar Record toggles the RecordingPanel's record/stop. The panel is
+    // built later (buildTabs); the lambda dereferences recordingPanel_ only
+    // when the user actually toggles, by which time it exists.
+    connect(recordAction_, &QAction::toggled, this, [this](bool on) {
+        if (!recordingPanel_) return;
+        if (on) {
+            recordingPanel_->startFromToolbar();
+        } else {
+            recordingPanel_->stopFromToolbar();
+        }
+    });
+
+    // Keep the Record action's checked state in sync with the controller's
+    // recording state. QSignalBlocker prevents a toggled→start→recordingChanged
+    // →setChecked→toggled feedback loop.
+    connect(controller_, &SessionController::recordingChanged, this, [this](bool recording) {
+        QSignalBlocker blocker(recordAction_);
+        recordAction_->setChecked(recording);
+    });
 }
 
 void MainWindow::buildDock()
@@ -115,13 +146,18 @@ void MainWindow::buildTabs()
     monitorView->setObjectName("monitorTab");
     tabs_->addTab(monitorView, "Monitor");
 
-    // Placeholder tabs for future tasks
-    const QStringList placeholderTabs = { "Registers", "Impedance", "Spectrum", "Recording" };
+    // Placeholder tabs for future tasks (Recording is now a real panel)
+    const QStringList placeholderTabs = { "Registers", "Impedance", "Spectrum" };
     for (const auto& name : placeholderTabs) {
         auto* placeholder = new QWidget();
         placeholder->setObjectName(name.toLower() + "Tab");
         tabs_->addTab(placeholder, name);
     }
+
+    // Recording tab — real RecordingPanel wired to the controller.
+    recordingPanel_ = new RecordingPanel(controller_, this);
+    recordingPanel_->setObjectName("recordingTab");
+    tabs_->addTab(recordingPanel_, "Recording");
 
     setCentralWidget(tabs_);
 }

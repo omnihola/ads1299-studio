@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 
 #include <QJsonObject>
+#include <QMetaType>
 
 namespace studio {
 
@@ -33,6 +34,18 @@ SessionController::SessionController(IDataSource* source,
             Qt::QueuedConnection);
 
     elapsedTimer_.start();
+
+    // Register EegFrameBatch so it can cross thread boundaries via a queued
+    // connection (writeBatch is invoked on writerThread_). Idempotent.
+    qRegisterMetaType<studio::EegFrameBatch>("studio::EegFrameBatch");
+
+    // Create the recorder and move it to the dedicated writer thread. The
+    // writer thread runs for the controller's lifetime so invokeMethod can
+    // dispatch open/writeBatch/addAnnotation/close to it.
+    recorder_ = new Recorder(nullptr);
+    recorder_->moveToThread(&writerThread_);
+    connect(&writerThread_, &QThread::finished, recorder_, &QObject::deleteLater);
+    writerThread_.start();
 }
 
 SessionController::~SessionController()
@@ -44,6 +57,16 @@ SessionController::~SessionController()
         QMetaObject::invokeMethod(source_, &IDataSource::stop, Qt::BlockingQueuedConnection);
         workerThread_.quit();
         workerThread_.wait();
+    }
+
+    // Stop the writer thread; finalise any in-progress recording first.
+    if (writerThread_.isRunning()) {
+        if (recorder_ && recorder_->isOpen()) {
+            QMetaObject::invokeMethod(recorder_, &Recorder::close,
+                                      Qt::BlockingQueuedConnection);
+        }
+        writerThread_.quit();
+        writerThread_.wait();
     }
 }
 
@@ -94,6 +117,76 @@ void SessionController::stopStreaming()
 
     setState(State::Idle);
     Logger::instance().log("info", "SessionController.stopStreaming", {});
+}
+
+// ---------------------------------------------------------------------------
+// Recording lifecycle
+// ---------------------------------------------------------------------------
+
+bool SessionController::startRecording(const QString& basePath,
+                                       const SessionMetadata& meta)
+{
+    if (state_.load(std::memory_order_relaxed) != State::Streaming) {
+        Logger::instance().log("warn", "SessionController.startRecording.notStreaming", {});
+        return false;
+    }
+
+    // Open the recorder ON the writer thread and capture the result.
+    bool opened = false;
+    QMetaObject::invokeMethod(recorder_,
+        [this, &basePath, &meta, &opened]() {
+            opened = recorder_->open(basePath, meta);
+        },
+        Qt::BlockingQueuedConnection);
+
+    if (!opened) {
+        Logger::instance().log("error", "SessionController.startRecording.openFailed",
+                               QJsonObject{{"basePath", basePath}});
+        return false;
+    }
+
+    recordClock_.restart();
+    markerCount_ = 0;
+    setState(State::Recording);
+    emit recordingChanged(true);
+    Logger::instance().log("info", "SessionController.startRecording",
+                           QJsonObject{{"basePath", basePath}});
+    return true;
+}
+
+void SessionController::stopRecording()
+{
+    if (state_.load(std::memory_order_relaxed) != State::Recording) return;
+
+    QMetaObject::invokeMethod(recorder_, &Recorder::close,
+                              Qt::BlockingQueuedConnection);
+    setState(State::Streaming);
+    emit recordingChanged(false);
+    Logger::instance().log("info", "SessionController.stopRecording",
+                           QJsonObject{{"markerCount", markerCount_}});
+}
+
+void SessionController::addMarker(const QString& label)
+{
+    if (state_.load(std::memory_order_relaxed) != State::Recording) return;
+
+    const double onsetSec = recordClock_.elapsed() / 1000.0;
+    QMetaObject::invokeMethod(recorder_,
+        [this, onsetSec, label]() {
+            recorder_->addAnnotation(onsetSec, label);
+        },
+        Qt::QueuedConnection);
+    ++markerCount_;
+    Logger::instance().log("info", "SessionController.addMarker",
+                           QJsonObject{{"label", label}, {"onsetSec", onsetSec}});
+}
+
+quint64 SessionController::recordedSamples() const
+{
+    if (state_.load(std::memory_order_relaxed) != State::Recording) return 0;
+    // recorder_ lives on writerThread_; samplesWritten() is a plain counter
+    // read. The race is benign for a display-only readout.
+    return recorder_->samplesWritten();
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +246,13 @@ void SessionController::onFrames(const EegFrameBatch& batch)
     m.sps            = sps;
     m.droppedSamples = droppedSamples_.load(std::memory_order_relaxed);
     m.bufferFill     = displayBuffer_.size();
+
+    // Forward the whole batch to the recorder (on the writer thread) when
+    // recording. Non-blocking — passes the batch by value via the metatype.
+    if (state_.load(std::memory_order_relaxed) == State::Recording) {
+        QMetaObject::invokeMethod(recorder_, "writeBatch", Qt::QueuedConnection,
+                                  Q_ARG(studio::EegFrameBatch, batch));
+    }
 
     emit metricsUpdated(m);
 }

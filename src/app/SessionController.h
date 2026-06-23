@@ -24,6 +24,8 @@
 #include "app/AppState.h"
 #include "core/acquisition/IDataSource.h"
 #include "core/dsp/RingBuffer.h"
+#include "core/recording/Recorder.h"
+#include "core/recording/SessionMetadata.h"
 
 namespace studio {
 
@@ -51,6 +53,15 @@ public:
     // can drive seq-gap logic directly without starting the worker thread.
     void onFrames(const EegFrameBatch& batch);
 
+    // ---- Recording lifecycle ----------------------------------------------
+    // Returns false if not currently Streaming or if the recorder fails to open.
+    // On success sets state to Recording, starts the record clock, and emits
+    // stateChanged + recordingChanged(true). Recorder I/O runs on writerThread_.
+    bool     startRecording(const QString& basePath, const SessionMetadata& meta);
+    void     stopRecording();
+    void     addMarker(const QString& label);
+    quint64  recordedSamples() const;  // 0 unless currently Recording
+
 public slots:
     void startStreaming();
     void stopStreaming();
@@ -59,6 +70,7 @@ signals:
     void metricsUpdated(studio::Metrics metrics);
     void stateChanged(studio::State state);
     void errorOccurred(QString message);
+    void recordingChanged(bool recording);
 
 private slots:
     void onSourceError(const QString& message);
@@ -70,6 +82,13 @@ private:
     IDataSource*          source_;        // lives on workerThread_
     QThread               workerThread_;
     RingBuffer<EegFrame>  displayBuffer_;
+
+    // Recording — recorder_ lives on its own writerThread_ so all BDF/CSV disk
+    // I/O happens off the controller/GUI thread.
+    Recorder*             recorder_      = nullptr;  // lives on writerThread_
+    QThread               writerThread_;
+    QElapsedTimer         recordClock_;              // started on startRecording
+    int                   markerCount_   = 0;
 
     // Mutable state — only written from onFrames() (controller thread)
     std::atomic<uint64_t> droppedSamples_{0};

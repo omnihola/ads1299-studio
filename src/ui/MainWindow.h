@@ -18,6 +18,7 @@ class QTimer;
 namespace studio {
 
 class SessionController;
+class RecordingPanel;
 
 class MainWindow : public QMainWindow
 {
@@ -58,6 +59,9 @@ private:
 
     // ---- Central tab widget -------------------------------------------------
     QTabWidget* tabs_ = nullptr;
+
+    // ---- Recording panel (lives in the "Recording" tab) ---------------------
+    RecordingPanel* recordingPanel_ = nullptr;
 
     // ---- Status bar widgets -------------------------------------------------
     LedIndicator* linkLed_      = nullptr;

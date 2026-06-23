@@ -54,6 +54,7 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     sampleRate_  = meta.sampleRate();
     hasError_    = false;
     samplesWritten_ = 0;
+    annotations_.clear();
 
     // ── 1. Open BDF+ file ────────────────────────────────────────────────────
     QString bdfPath = basePath_ + ".bdf";
@@ -148,6 +149,13 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     return true;
 }
 
+// ─── addAnnotation ───────────────────────────────────────────────────────────
+
+void Recorder::addAnnotation(double onsetSec, const QString& label)
+{
+    annotations_.add(onsetSec, label);
+}
+
 // ─── writeBatch ──────────────────────────────────────────────────────────────
 
 void Recorder::writeBatch(const EegFrameBatch& batch)
@@ -194,8 +202,9 @@ void Recorder::close()
         flushOneRecord();
     }
 
-    // Close BDF+
+    // Write annotations (event markers) into the BDF+ before closing.
     if (edfHandle_ >= 0) {
+        annotations_.writeToBdf(edfHandle_);
         edfclose_file(edfHandle_);
         edfHandle_ = -1;
     }
@@ -257,6 +266,7 @@ void Recorder::writeMetaJson(bool isFinal)
     obj["bdfFile"] = QFileInfo(basePath_ + ".bdf").fileName();
     obj["csvFile"] = QFileInfo(basePath_ + ".csv").fileName();
     obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
+    obj["annotations"] = annotations_.toJson();
 
     QString metaPath = basePath_ + ".meta.json";
     QFile f(metaPath);
