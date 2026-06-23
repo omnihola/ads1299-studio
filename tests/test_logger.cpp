@@ -87,6 +87,40 @@ private slots:
         QVERIFY(doc2.isObject());
         QCOMPARE(doc2.object()["event"].toString(), QString("drop"));
     }
+
+    void test_reservedKeys_protectedFromSpoofing()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("test3.jsonl");
+
+        Logger::instance().open(path);
+        Logger::instance().log("info", "record_start", QJsonObject{{"event", "SPOOFED"}, {"subject", "s1"}});
+        Logger::instance().close();
+
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        QByteArray content = f.readAll();
+        f.close();
+
+        QList<QByteArray> lines;
+        for (const QByteArray &line : content.split('\n')) {
+            if (!line.trimmed().isEmpty())
+                lines.append(line);
+        }
+
+        QCOMPARE(lines.size(), 1);
+
+        QJsonDocument doc = QJsonDocument::fromJson(lines[0]);
+        QVERIFY(doc.isObject());
+        QJsonObject obj = doc.object();
+
+        // Reserved fields must not be overwritten by caller-supplied fields
+        QCOMPARE(obj["event"].toString(), QString("record_start"));
+        QCOMPARE(obj["level"].toString(), QString("info"));
+        // But caller fields should still be present
+        QCOMPARE(obj["subject"].toString(), QString("s1"));
+    }
 };
 
 QTEST_MAIN(TestLogger)

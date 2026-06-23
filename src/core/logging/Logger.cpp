@@ -1,6 +1,7 @@
 #include "Logger.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <QIODevice>
 #include <QJsonDocument>
 #include <QMutexLocker>
@@ -20,7 +21,9 @@ void Logger::open(const QString& path)
     if (file_.isOpen())
         file_.close();
     file_.setFileName(path);
-    (void)file_.open(QIODevice::Append | QIODevice::Text);
+    if (!file_.open(QIODevice::Append | QIODevice::Text)) {
+        qWarning() << "Logger: failed to open log file" << path << ":" << file_.errorString();
+    }
 }
 
 void Logger::log(const QString& level,
@@ -32,12 +35,13 @@ void Logger::log(const QString& level,
         return;
 
     QJsonObject obj;
-    obj["ts"]    = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
-    obj["level"] = level;
-    obj["event"] = event;
 
     for (auto it = fields.constBegin(); it != fields.constEnd(); ++it)
         obj[it.key()] = it.value();
+
+    obj["ts"]    = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+    obj["level"] = level;
+    obj["event"] = event;
 
     const QByteArray line = QJsonDocument(obj).toJson(QJsonDocument::Compact) + '\n';
     file_.write(line);
