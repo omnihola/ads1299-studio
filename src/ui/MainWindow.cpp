@@ -21,6 +21,7 @@
 
 #include "app/SessionController.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
 #include "ui/RegistersView.h"
@@ -152,13 +153,15 @@ void MainWindow::buildTabs()
     registersView->setObjectName("registersTab");
     tabs_->addTab(registersView, "Registers");
 
-    // Placeholder tabs for future tasks
-    const QStringList placeholderTabs = { "Impedance", "Spectrum" };
-    for (const auto& name : placeholderTabs) {
-        auto* placeholder = new QWidget();
-        placeholder->setObjectName(name.toLower() + "Tab");
-        tabs_->addTab(placeholder, name);
-    }
+    // Impedance tab — live per-channel electrode impedance display
+    impedanceView_ = new ImpedanceView(controller_, this);
+    impedanceView_->setObjectName("impedanceTab");
+    tabs_->addTab(impedanceView_, "Impedance");
+
+    // Placeholder tab for future tasks
+    auto* spectrumPlaceholder = new QWidget();
+    spectrumPlaceholder->setObjectName("spectrumTab");
+    tabs_->addTab(spectrumPlaceholder, "Spectrum");
 
     // Recording tab — real RecordingPanel wired to the controller.
     recordingPanel_ = new RecordingPanel(controller_, this);

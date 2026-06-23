@@ -19,6 +19,7 @@ namespace studio {
 
 class SessionController;
 class RecordingPanel;
+class ImpedanceView;
 
 class MainWindow : public QMainWindow
 {
@@ -62,6 +63,9 @@ private:
 
     // ---- Recording panel (lives in the "Recording" tab) ---------------------
     RecordingPanel* recordingPanel_ = nullptr;
+
+    // ---- Impedance view (lives in the "Impedance" tab) ----------------------
+    ImpedanceView*  impedanceView_  = nullptr;
 
     // ---- Status bar widgets -------------------------------------------------
     LedIndicator* linkLed_      = nullptr;

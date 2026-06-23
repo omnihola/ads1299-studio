@@ -284,6 +284,10 @@ void SessionController::onFrames(const EegFrameBatch& batch)
     m.sps            = sps;
     m.droppedSamples = droppedSamples_.load(std::memory_order_relaxed);
     m.bufferFill     = displayBuffer_.size();
+    if (!batch.empty()) {
+        m.leadOffP = batch.back().statP;
+        m.leadOffN = batch.back().statN;
+    }
 
     // Forward the whole batch to the recorder (on the writer thread) when
     // recording. Non-blocking — passes the batch by value via the metatype.

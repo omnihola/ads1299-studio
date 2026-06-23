@@ -82,3 +82,8 @@ add_executable(test_iirfilter test_iirfilter.cpp)
 set_target_properties(test_iirfilter PROPERTIES AUTOMOC ON)
 target_link_libraries(test_iirfilter PRIVATE studio_core Qt6::Test)
 add_test(NAME iirfilter COMMAND test_iirfilter)
+
+add_executable(test_impedancelog test_impedancelog.cpp)
+set_target_properties(test_impedancelog PROPERTIES AUTOMOC ON)
+target_link_libraries(test_impedancelog PRIVATE studio_core Qt6::Test)
+add_test(NAME test_impedancelog COMMAND test_impedancelog)
