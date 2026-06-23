@@ -128,6 +128,27 @@ private slots:
         // so no gap is detected either.
         QCOMPARE(ctrl.droppedSamples(), uint64_t(0));
     }
+
+    // -----------------------------------------------------------------------
+    // Test 7: live worker-thread streaming path delivers frames
+    // Exercises the REAL moveToThread + QTimer path that had the bug.
+    // Before the fix: timer_ stayed on the GUI thread, timer never fired,
+    //                 displayBuffer() stayed empty.
+    // After the fix:  timer_ is a child → migrates with moveToThread → fires
+    //                 on the worker thread → frames arrive in displayBuffer().
+    // -----------------------------------------------------------------------
+    void test_liveStreamingDeliversFrames()
+    {
+        studio::SessionController ctrl(new studio::SimulatedSource(7));
+
+        ctrl.startStreaming();
+        QTest::qWait(300);  // let worker thread + timer produce frames
+
+        QVERIFY2(ctrl.displayBuffer().size() > 0,
+                 "displayBuffer must be non-empty after 300ms of live streaming");
+
+        ctrl.stopStreaming();
+    }
 };
 
 QTEST_MAIN(TestSessionController)

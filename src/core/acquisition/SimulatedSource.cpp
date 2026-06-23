@@ -6,7 +6,8 @@ namespace studio {
 
 SimulatedSource::SimulatedSource(uint32_t seed, QObject* parent)
     : IDataSource(parent), rng_(seed) {
-    connect(&timer_, &QTimer::timeout, this, &SimulatedSource::tick);
+    timer_ = new QTimer(this);
+    connect(timer_, &QTimer::timeout, this, &SimulatedSource::tick);
 }
 
 SourceCapabilities SimulatedSource::capabilities() const {
@@ -56,13 +57,13 @@ void SimulatedSource::start() {
     if (running_) return;
     running_ = true;
     emit runningChanged(true);
-    timer_.start(20);
+    timer_->start(20);
 }
 
 void SimulatedSource::stop() {
     if (!running_) return;
     running_ = false;
-    timer_.stop();
+    timer_->stop();
     emit runningChanged(false);
 }
 

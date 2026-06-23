@@ -24,7 +24,7 @@ private slots:
     void tick();
 
 private:
-    QTimer timer_;
+    QTimer* timer_ = nullptr;
     std::mt19937 rng_;
     bool running_ = false;
     int sps_ = 250;
