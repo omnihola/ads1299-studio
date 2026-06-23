@@ -16,9 +16,11 @@ target_link_libraries(qcustomplot PUBLIC Qt6::Widgets Qt6::PrintSupport)
 
 add_library(edflib STATIC third_party/edflib/edflib.c)
 target_include_directories(edflib PUBLIC third_party/edflib)
+set_target_properties(edflib PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 
 add_library(kissfft STATIC third_party/kissfft/kiss_fft.c third_party/kissfft/kiss_fftr.c)
 target_include_directories(kissfft PUBLIC third_party/kissfft)
+set_target_properties(kissfft PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 
 # Core library (grows over the plan)
 # Use GLOB; if no sources yet, define as INTERFACE to avoid "no sources" error.
