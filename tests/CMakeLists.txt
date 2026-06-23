@@ -56,3 +56,8 @@ add_executable(test_recorder test_recorder.cpp)
 set_target_properties(test_recorder PROPERTIES AUTOMOC ON)
 target_link_libraries(test_recorder PRIVATE studio_core Qt6::Test)
 add_test(NAME recorder COMMAND test_recorder)
+
+add_executable(test_annotationstore test_annotationstore.cpp)
+set_target_properties(test_annotationstore PROPERTIES AUTOMOC ON)
+target_link_libraries(test_annotationstore PRIVATE studio_core Qt6::Test)
+add_test(NAME test_annotationstore COMMAND test_annotationstore)
