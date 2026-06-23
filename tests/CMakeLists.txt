@@ -13,3 +13,8 @@ set_target_properties(test_ringbuffer PROPERTIES AUTOMOC ON)
 target_link_libraries(test_ringbuffer PRIVATE studio_core Qt6::Test)
 target_include_directories(test_ringbuffer PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME test_ringbuffer COMMAND test_ringbuffer)
+
+add_executable(test_scaleconverter test_scaleconverter.cpp)
+set_target_properties(test_scaleconverter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_scaleconverter PRIVATE studio_core Qt6::Test)
+add_test(NAME test_scaleconverter COMMAND test_scaleconverter)
