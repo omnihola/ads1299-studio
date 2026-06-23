@@ -61,6 +61,17 @@ SessionController::~SessionController()
         workerThread_.wait();
     }
 
+    // FIX 2: Free source_ now that workerThread_ is stopped. Move it back to
+    // the current thread (required for a direct delete) then delete directly —
+    // NOT deleteLater, as the event loop may not be running during shutdown.
+    // source_ has no QObject parent (ctor calls setParent(nullptr)) so there
+    // is no risk of a double-delete.
+    if (source_) {
+        source_->moveToThread(QThread::currentThread());
+        delete source_;
+        source_ = nullptr;
+    }
+
     // Stop the writer thread; finalise any in-progress recording first.
     if (writerThread_.isRunning()) {
         if (recorder_ && recorder_->isOpen()) {
@@ -312,6 +323,8 @@ quint64 SessionController::recordedSamples() const
 
 void SessionController::onFrames(const EegFrameBatch& batch)
 {
+    const bool isRecording = (state_.load(std::memory_order_relaxed) == State::Recording);
+
     for (const EegFrame& frame : batch) {
         // --- Seq-continuity check ---
         if (firstFrame_) {
@@ -332,6 +345,25 @@ void SessionController::onFrames(const EegFrameBatch& batch)
                         {"received", static_cast<qint64>(frame.seq)},
                         {"gap",      static_cast<qint64>(gap)}
                     });
+
+                // FIX 1: While recording, pad the BDF/CSV timeline with zeros
+                // to preserve alignment with true acquisition time, and add a
+                // BDF+ annotation marking the drop. Both are dispatched to the
+                // writer thread (QueuedConnection) BEFORE the frame's writeBatch
+                // so ordering is correct (FIFO event queue).
+                if (isRecording) {
+                    const double onsetSec = recordClock_.elapsed() / 1000.0;
+                    QMetaObject::invokeMethod(recorder_, "writeGap",
+                                              Qt::QueuedConnection,
+                                              Q_ARG(quint32, static_cast<quint32>(gap)));
+                    QMetaObject::invokeMethod(recorder_,
+                        [this, onsetSec, gap]() {
+                            recorder_->addAnnotation(
+                                onsetSec,
+                                QString("drop: %1 samples").arg(gap));
+                        },
+                        Qt::QueuedConnection);
+                }
             }
             // Advance the counter past the frame we just processed.
             expectedSeq_ = static_cast<uint64_t>(frame.seq) + 1;
@@ -383,7 +415,9 @@ void SessionController::onFrames(const EegFrameBatch& batch)
 
     // Forward the whole batch to the recorder (on the writer thread) when
     // recording. Non-blocking — passes the batch by value via the metatype.
-    if (state_.load(std::memory_order_relaxed) == State::Recording) {
+    // Any gap writeGap/addAnnotation events posted above are already queued
+    // ahead of this writeBatch call (FIFO), so ordering is guaranteed.
+    if (isRecording) {
         QMetaObject::invokeMethod(recorder_, "writeBatch", Qt::QueuedConnection,
                                   Q_ARG(studio::EegFrameBatch, batch));
     }

@@ -52,8 +52,9 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     meta_        = meta;
     basePath_    = basePath;
     sampleRate_  = meta.sampleRate();
-    hasError_    = false;
-    samplesWritten_ = 0;
+    hasError_        = false;
+    samplesWritten_  = 0;
+    paddedSamples_   = 0;
     annotations_.clear();
 
     // ── 1. Open BDF+ file ────────────────────────────────────────────────────
@@ -185,6 +186,31 @@ void Recorder::writeBatch(const EegFrameBatch& batch)
     }
 }
 
+// ─── writeGap ────────────────────────────────────────────────────────────────
+
+void Recorder::writeGap(quint32 nSamples)
+{
+    if (!isOpen_ || hasError_ || nSamples == 0) return;
+
+    for (quint32 i = 0; i < nSamples; ++i) {
+        // Write a zero sample into every channel in the record buffer.
+        for (int ch = 0; ch < kChannels; ++ch) {
+            recBuf_[ch * sampleRate_ + recBufFilled_] = 0;
+        }
+        ++recBufFilled_;
+
+        if (recBufFilled_ == sampleRate_) {
+            flushOneRecord();
+            if (hasError_) return;
+        }
+
+        // Write a zero-fill CSV row so CSV row count stays aligned with BDF.
+        writeGapCsvRow(samplesWritten_ + paddedSamples_);
+
+        ++paddedSamples_;
+    }
+}
+
 // ─── close ───────────────────────────────────────────────────────────────────
 
 void Recorder::close()
@@ -257,6 +283,19 @@ void Recorder::writeCsvRow(const EegFrame& frame, quint64 frameIndex)
     }
 }
 
+// ─── writeGapCsvRow ──────────────────────────────────────────────────────────
+
+void Recorder::writeGapCsvRow(quint64 frameIndex)
+{
+    // Gap rows: seq field is blank, all channel values are 0.0 µV.
+    double tSeconds = static_cast<double>(frameIndex) / static_cast<double>(sampleRate_);
+    csvStream_ << "," << tSeconds;
+    for (int c = 0; c < kChannels; ++c) {
+        csvStream_ << ",0";
+    }
+    csvStream_ << "\n";
+}
+
 // ─── writeMetaJson ───────────────────────────────────────────────────────────
 
 void Recorder::writeMetaJson(bool isFinal)
@@ -266,6 +305,7 @@ void Recorder::writeMetaJson(bool isFinal)
     obj["bdfFile"] = QFileInfo(basePath_ + ".bdf").fileName();
     obj["csvFile"] = QFileInfo(basePath_ + ".csv").fileName();
     obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
+    obj["paddedSamples"]          = static_cast<qint64>(paddedSamples_);
     obj["annotations"] = annotations_.toJson();
 
     QString metaPath = basePath_ + ".meta.json";

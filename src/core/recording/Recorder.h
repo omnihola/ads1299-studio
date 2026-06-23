@@ -86,6 +86,16 @@ public slots:
      */
     void writeBatch(const EegFrameBatch& batch);
 
+    /**
+     * Appends \p nSamples of zero-value samples to every channel, preserving
+     * BDF timeline alignment across a hardware acquisition gap. Uses the same
+     * record-buffering path as writeBatch (flushes full 1-second records as
+     * needed). Does NOT increment samplesWritten_ (tracked separately as
+     * paddedSamples_). A slot so it can be invoked across the writer thread
+     * boundary via QMetaObject::invokeMethod with Qt::QueuedConnection.
+     */
+    void writeGap(quint32 nSamples);
+
 signals:
     void errorOccurred(const QString& message);
 
@@ -93,6 +103,7 @@ private:
     // Internal helpers
     void flushOneRecord();   // writes one full BDF+ data record from buf_
     void writeCsvRow(const EegFrame& frame, quint64 frameIndex);
+    void writeGapCsvRow(quint64 frameIndex);
     void writeMetaJson(bool isFinal);
     void handleEdfError(const QString& context, int code);
 
@@ -100,7 +111,8 @@ private:
     bool     isOpen_     = false;
     bool     hasError_   = false;
     int      edfHandle_  = -1;
-    quint64  samplesWritten_ = 0;
+    quint64  samplesWritten_  = 0;
+    quint64  paddedSamples_   = 0; // zero-fill samples written for gap preservation
 
     // Session info
     SessionMetadata meta_;

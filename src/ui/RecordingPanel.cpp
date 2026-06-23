@@ -26,7 +26,6 @@
 namespace studio {
 
 namespace {
-constexpr int kSampleRate    = 250;   // default sample rate (display + meta)
 constexpr int kReadoutMs     = 500;   // live-readout refresh interval
 } // namespace
 
@@ -76,9 +75,11 @@ void RecordingPanel::buildUi()
     folderRow->addWidget(browseButton_);
     form->addRow("Output Folder:", folderRow);
 
-    auto* srLabel = new QLabel(QString("%1 Hz").arg(kSampleRate), this);
-    srLabel->setObjectName("sampleRateLabel");
-    form->addRow("Sample Rate:", srLabel);
+    // FIX 4: Show the actual configured sample rate, not a hardcoded constant.
+    const int initialSr = controller_ ? controller_->config().sampleRate() : 250;
+    sampleRateLabel_ = new QLabel(QString("%1 Hz").arg(initialSr), this);
+    sampleRateLabel_->setObjectName("sampleRateLabel");
+    form->addRow("Sample Rate:", sampleRateLabel_);
 
     mainLayout->addLayout(form);
 
@@ -130,6 +131,11 @@ void RecordingPanel::wireSignals()
     connect(readoutTimer_,    &QTimer::timeout,      this, &RecordingPanel::updateReadout);
     connect(controller_,      &SessionController::recordingChanged,
             this,             &RecordingPanel::onRecordingChanged);
+    // FIX 4: Keep sample-rate label honest when config changes.
+    connect(controller_, &SessionController::configChanged,
+            this, [this](const studio::DeviceConfig& cfg) {
+        sampleRateLabel_->setText(QString("%1 Hz").arg(cfg.sampleRate()));
+    });
 }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
@@ -166,11 +172,15 @@ void RecordingPanel::onRecordClicked()
     const QString ts        = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
     const QString basePath  = folder + "/" + subjectId + "_" + ts;
 
+    // FIX 4: pass the actual configured sample rate; SessionController::startRecording
+    // will override it anyway via withSampleRate(config_.sampleRate()), but keeping
+    // the panel honest avoids confusion in logging.
+    const int sr = controller_->config().sampleRate();
     const auto meta = SessionMetadata()
         .withSubjectId(subjectId)
         .withMontage(montageEdit_->text().trimmed())
         .withNotes(notesEdit_->toPlainText())
-        .withSampleRate(kSampleRate)
+        .withSampleRate(sr)
         .withStartTimeUtc(QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
 
     if (!controller_->startRecording(basePath, meta)) {

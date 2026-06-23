@@ -36,6 +36,23 @@ MonitorView::MonitorView(SessionController* controller, QWidget* parent)
     stylePlot();
     setupGraphs();
 
+    // FIX 3: Initialise per-channel gains from the current device config so
+    // displayed µV values match the actual ADS1299 PGA gain (default 24, not 1).
+    if (controller_) {
+        const auto gainArr = controller_->config().gain();
+        for (int c = 0; c < 8; ++c) {
+            gains_[c] = gainArr[static_cast<size_t>(c)];
+        }
+        // Refresh gains whenever the device config changes.
+        connect(controller_, &SessionController::configChanged,
+                this, [this](const studio::DeviceConfig& cfg) {
+            const auto arr = cfg.gain();
+            for (int c = 0; c < 8; ++c) {
+                gains_[c] = arr[static_cast<size_t>(c)];
+            }
+        });
+    }
+
     // Wire render timer
     connect(&renderTimer_, &QTimer::timeout, this, &MonitorView::onRenderTick);
     renderTimer_.setInterval(kRenderIntervalMs);
@@ -78,7 +95,6 @@ void MonitorView::onRenderTick()
     }
 
     const double dt = 1.0 / static_cast<double>(sampleRateHz_);
-    ScaleConverter converter(gain_);
 
     EegFrame frame;
     bool gotAny = false;
@@ -89,6 +105,8 @@ void MonitorView::onRenderTick()
         currentTimeSec_ += dt;
 
         for (int c = 0; c < kNumChannels; ++c) {
+            // FIX 3: use per-channel configured gain so µV scale is correct.
+            ScaleConverter converter(gains_[c]);
             const double uv = converter.countsToMicrovolts(frame.ch[c]);
             channelSamples_[c].append(uv + offsetUv(c));
         }

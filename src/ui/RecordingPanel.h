@@ -62,6 +62,7 @@ private:
 
     // Live readout
     QLabel*         readoutLabel_    = nullptr;
+    QLabel*         sampleRateLabel_ = nullptr;  // FIX 4: shows actual config sample rate
     QTimer*         readoutTimer_    = nullptr;
     QElapsedTimer   recordElapsed_;   // restarted on record; drives mm:ss readout
 };

@@ -69,7 +69,7 @@ private:
 
     // ---- State --------------------------------------------------------------
     bool   paused_         = false;
-    int    gain_           = 1;          // ADS1299 PGA gain
+    int    gains_[8]       = {1,1,1,1,1,1,1,1}; // per-channel ADS1299 PGA gain (from config)
     double uvPerDiv_       = 200.0;      // µV/div from combo box
 
     // ---- Constants ----------------------------------------------------------
