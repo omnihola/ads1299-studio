@@ -18,3 +18,8 @@ add_executable(test_scaleconverter test_scaleconverter.cpp)
 set_target_properties(test_scaleconverter PROPERTIES AUTOMOC ON)
 target_link_libraries(test_scaleconverter PRIVATE studio_core Qt6::Test)
 add_test(NAME test_scaleconverter COMMAND test_scaleconverter)
+
+add_executable(test_simulatedsource test_simulatedsource.cpp)
+set_target_properties(test_simulatedsource PROPERTIES AUTOMOC ON)
+target_link_libraries(test_simulatedsource PRIVATE studio_core Qt6::Test)
+add_test(NAME test_simulatedsource COMMAND test_simulatedsource)
