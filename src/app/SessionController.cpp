@@ -158,10 +158,15 @@ void SessionController::stopRecording()
 {
     if (state_.load(std::memory_order_relaxed) != State::Recording) return;
 
-    QMetaObject::invokeMethod(recorder_, &Recorder::close,
-                              Qt::BlockingQueuedConnection);
+    // Flip state BEFORE closing the recorder. onFrames only forwards to the
+    // recorder while state()==Recording, so changing state first stops any new
+    // writeBatch events from being enqueued. Batches already posted to the
+    // writer thread still drain first (FIFO event queue) because the close
+    // event is posted after them.
     setState(State::Streaming);
     emit recordingChanged(false);
+    QMetaObject::invokeMethod(recorder_, &Recorder::close,
+                              Qt::BlockingQueuedConnection);
     Logger::instance().log("info", "SessionController.stopRecording",
                            QJsonObject{{"markerCount", markerCount_}});
 }

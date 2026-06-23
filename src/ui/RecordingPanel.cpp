@@ -30,10 +30,6 @@ constexpr int kSampleRate    = 250;   // default sample rate (display + meta)
 constexpr int kReadoutMs     = 500;   // live-readout refresh interval
 } // namespace
 
-// Elapsed timer used for the live mm:ss readout. Kept file-local (not in the
-// header) to avoid leaking <QElapsedTimer> into every includer.
-static QElapsedTimer s_recordElapsed;
-
 RecordingPanel::RecordingPanel(SessionController* controller, QWidget* parent)
     : QWidget(parent)
     , controller_(controller)
@@ -183,7 +179,7 @@ void RecordingPanel::onRecordClicked()
                               "and the output folder writable.");
         return;
     }
-    s_recordElapsed.restart();
+    recordElapsed_.restart();
     // Button states are updated by onRecordingChanged via the controller signal.
 }
 
@@ -228,7 +224,7 @@ void RecordingPanel::setRecordingMode(bool recording)
     browseButton_->setEnabled(!recording);
 
     if (recording) {
-        s_recordElapsed.restart();
+        recordElapsed_.restart();
         readoutTimer_->start();
         updateReadout();
     } else {
@@ -239,7 +235,7 @@ void RecordingPanel::setRecordingMode(bool recording)
 
 void RecordingPanel::updateReadout()
 {
-    const qint64 totalSec = s_recordElapsed.isValid() ? s_recordElapsed.elapsed() / 1000 : 0;
+    const qint64 totalSec = recordElapsed_.isValid() ? recordElapsed_.elapsed() / 1000 : 0;
     const int minutes = static_cast<int>(totalSec / 60);
     const int seconds = static_cast<int>(totalSec % 60);
     const quint64 samples = controller_->recordedSamples();

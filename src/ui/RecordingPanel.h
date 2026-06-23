@@ -6,6 +6,7 @@
 // boundary (non-empty subject ID, writable output folder) before starting.
 
 #include <QWidget>
+#include <QElapsedTimer>
 
 class QLineEdit;
 class QPlainTextEdit;
@@ -62,6 +63,7 @@ private:
     // Live readout
     QLabel*         readoutLabel_    = nullptr;
     QTimer*         readoutTimer_    = nullptr;
+    QElapsedTimer   recordElapsed_;   // restarted on record; drives mm:ss readout
 };
 
 } // namespace studio
