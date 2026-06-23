@@ -1,0 +1,18 @@
+# Build
+/build/
+/cmake-build-*/
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+# IDE
+/.idea/
+/.vscode/
+*.user
+# macOS
+.DS_Store
+# Recordings / data
+/recordings/
+*.bdf
+*.edf
