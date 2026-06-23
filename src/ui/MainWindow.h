@@ -31,6 +31,9 @@ public:
     // Accessor so later tasks can swap tab contents
     QTabWidget* tabs() const { return tabs_; }
 
+    // Programmatically start streaming (used by --shot headless screenshot path)
+    void startStreamingForDemo();
+
 private slots:
     void onStartToggled(bool on);
     void onMetricsUpdated(studio::Metrics m);

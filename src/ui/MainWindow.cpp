@@ -185,6 +185,11 @@ void MainWindow::wireController()
 // Slots
 // ──────────────────────────────────────────────────────────────────────────────
 
+void MainWindow::startStreamingForDemo()
+{
+    startAction_->setChecked(true);
+}
+
 void MainWindow::onStartToggled(bool on)
 {
     if (on) {
