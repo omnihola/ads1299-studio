@@ -25,6 +25,7 @@ EegFrameBatch SimulatedSource::generateBatch(int n) {
 
     std::normal_distribution<double> noise(0.0, 4.0);  // µV-scale noise
     const double dt = 1.0 / sps_;
+    const double lsbUv = (kVref / (24.0 * kAdcFullScale)) * 1e6;
 
     for (int i = 0; i < n; ++i) {
         EegFrame f;
@@ -36,7 +37,6 @@ EegFrameBatch SimulatedSource::generateBatch(int n) {
                       + noise(rng_);
 
             // µV -> counts at gain 24
-            double lsbUv = (kVref / (24.0 * kAdcFullScale)) * 1e6;
             f.ch[c] = int32_t(uv / lsbUv);
         }
 
