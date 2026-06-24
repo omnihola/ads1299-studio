@@ -161,6 +161,15 @@ void SessionController::startStreaming()
 
     workerThread_.start();
 
+    // Sync the source's sample rate to the configured rate before starting.
+    // This ensures the source matches config_ at stream startup, preventing the
+    // divergence where applyConfig hasn't been called by the user yet.
+    QMetaObject::invokeMethod(source_,
+        [this, sps = config_.sampleRate()]() {
+            source_->setSampleRate(sps);
+        },
+        Qt::QueuedConnection);
+
     // Start the source on the worker thread via a queued invocation.
     QMetaObject::invokeMethod(source_, &IDataSource::start, Qt::QueuedConnection);
 }

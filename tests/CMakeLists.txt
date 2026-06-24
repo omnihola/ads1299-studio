@@ -161,3 +161,9 @@ target_include_directories(test_acquisitionpanel PRIVATE ${CMAKE_SOURCE_DIR}/src
 target_link_libraries(test_acquisitionpanel PRIVATE studio_core Qt6::Widgets Qt6::Test)
 add_test(NAME test_acquisitionpanel COMMAND test_acquisitionpanel)
 set_tests_properties(test_acquisitionpanel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_startuprate test_startuprate.cpp)
+set_target_properties(test_startuprate PROPERTIES AUTOMOC ON)
+target_link_libraries(test_startuprate PRIVATE studio_core Qt6::Test)
+add_test(NAME test_startuprate COMMAND test_startuprate)
+set_tests_properties(test_startuprate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
