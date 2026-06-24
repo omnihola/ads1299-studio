@@ -128,3 +128,8 @@ set_target_properties(test_mmb0datasource PROPERTIES AUTOMOC ON)
 target_link_libraries(test_mmb0datasource PRIVATE studio_core Qt6::Test)
 add_test(NAME test_mmb0datasource COMMAND test_mmb0datasource)
 set_tests_properties(test_mmb0datasource PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_mmb0transport test_mmb0transport.cpp)
+set_target_properties(test_mmb0transport PROPERTIES AUTOMOC ON)
+target_link_libraries(test_mmb0transport PRIVATE studio_core Qt6::Test)
+add_test(NAME test_mmb0transport COMMAND test_mmb0transport)
