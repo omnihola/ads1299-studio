@@ -11,11 +11,14 @@
 #include <QVector>
 #include <QTimer>
 
+#include "core/dsp/DisplayFilterChain.h"
+
 // Forward declarations
 class QCustomPlot;
 class QCPGraph;
 class QPushButton;
 class QComboBox;
+class QLabel;
 
 namespace studio {
 
@@ -38,12 +41,16 @@ public:
 public slots:
     void onRenderTick();
 
+private slots:
+    void onFilterChanged();
+
 private:
     void buildLayout();
     void stylePlot();
     void setupGraphs();
     double offsetUv(int channel) const;
     void applyYScale();
+    void rebuildFilterChain();
 
     // ---- Dependencies -------------------------------------------------------
     SessionController* controller_ = nullptr;
@@ -66,6 +73,13 @@ private:
     // ---- Controls -----------------------------------------------------------
     QPushButton* pauseButton_  = nullptr;
     QComboBox*   uvDivCombo_   = nullptr;
+    QComboBox*   notchCombo_   = nullptr;  // Off / 50 Hz / 60 Hz
+    QComboBox*   bpCombo_      = nullptr;  // Off / bandpass presets
+    QLabel*      filterHint_   = nullptr;
+
+    // ---- Display-only filter chain ------------------------------------------
+    // Applied ONLY to the values sent to the plot. Recording path is untouched.
+    studio::dsp::DisplayFilterChain filterChain_;
 
     // ---- State --------------------------------------------------------------
     bool   paused_         = false;

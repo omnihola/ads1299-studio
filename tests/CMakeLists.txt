@@ -173,3 +173,8 @@ set_target_properties(test_configfreeze PROPERTIES AUTOMOC ON)
 target_link_libraries(test_configfreeze PRIVATE studio_core Qt6::Test)
 add_test(NAME test_configfreeze COMMAND test_configfreeze)
 set_tests_properties(test_configfreeze PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_displayfilter test_displayfilter.cpp)
+set_target_properties(test_displayfilter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_displayfilter PRIVATE studio_core Qt6::Test)
+add_test(NAME test_displayfilter COMMAND test_displayfilter)
