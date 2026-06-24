@@ -8,6 +8,8 @@
 #include <QDockWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QScrollArea>
+#include <QFrame>
 #include <QInputDialog>
 #include <QLabel>
 #include <QStatusBar>
@@ -83,8 +85,8 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
         }
     });
 
-    // Ctrl+1..Ctrl+6 — switch between the six main tabs
-    for (int i = 0; i < 6; ++i) {
+    // Ctrl+1..Ctrl+5 — switch between the five main tabs
+    for (int i = 0; i < 5; ++i) {
         auto* sc = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i + 1)), this);
         connect(sc, &QShortcut::activated, this, [this, i]() {
             tabs_->setCurrentIndex(i);
@@ -205,9 +207,36 @@ void MainWindow::buildDock()
     dock->setAllowedAreas(Qt::LeftDockWidgetArea);
     dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
 
-    auto* acqPanel = new AcquisitionPanel(controller_, dock);
+    // Dock content: Acquisition controls (top) + the Recording module (below,
+    // filling the space that used to be empty). Recording was moved out of the
+    // tab bar into the sidebar since it is used frequently. Wrapped in a scroll
+    // area so the combined height fits a narrow/short dock.
+    auto* container = new QWidget(dock);
+    auto* vbox      = new QVBoxLayout(container);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(8);
+
+    auto* acqPanel = new AcquisitionPanel(controller_, container);
     acqPanel->setObjectName("acquisitionPanel");
-    dock->setWidget(acqPanel);
+    vbox->addWidget(acqPanel);
+
+    auto* sep = new QFrame(container);
+    sep->setFrameShape(QFrame::HLine);
+    sep->setStyleSheet("color:#2d333b;");
+    vbox->addWidget(sep);
+
+    // Recording module (moved out of the tabs into the left sidebar).
+    recordingPanel_ = new RecordingPanel(controller_, container);
+    recordingPanel_->setObjectName("recordingPanel");
+    vbox->addWidget(recordingPanel_);
+
+    vbox->addStretch(1);
+
+    auto* scroll = new QScrollArea(dock);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(container);
+    dock->setWidget(scroll);
 
     addDockWidget(Qt::LeftDockWidgetArea, dock);
 }
@@ -238,10 +267,8 @@ void MainWindow::buildTabs()
     spectrumView->setObjectName("spectrumTab");
     tabs_->addTab(spectrumView, "Spectrum");
 
-    // Recording tab — real RecordingPanel wired to the controller.
-    recordingPanel_ = new RecordingPanel(controller_, this);
-    recordingPanel_->setObjectName("recordingTab");
-    tabs_->addTab(recordingPanel_, "Recording");
+    // (Recording is no longer a tab — it lives in the left "Acquisition" dock,
+    //  built in buildDock() which runs before this.)
 
     // Sessions tab — browse/reveal/export past recordings.
     sessionsView_ = new SessionsView(QString(), this);

@@ -28,8 +28,7 @@ inline QVector<ShortcutDef> shortcutDefs()
         {"Ctrl+2",  "Registers tab"},
         {"Ctrl+3",  "Impedance tab"},
         {"Ctrl+4",  "Spectrum tab"},
-        {"Ctrl+5",  "Recording tab"},
-        {"Ctrl+6",  "Sessions tab"},
+        {"Ctrl+5",  "Sessions tab"},
         {"F1",      "Keyboard shortcuts help"},
     };
 }
