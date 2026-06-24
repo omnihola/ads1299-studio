@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -71,6 +72,17 @@ void RecordingPanel::buildUi()
     folderEdit_ = new QLineEdit(this);
     folderEdit_->setObjectName("outputFolder");
     folderEdit_->setPlaceholderText("/path/to/recordings");
+    // Pre-fill a real, writable default folder so recording works out of the box
+    // (the user can still change it via Browse). The folder itself is created
+    // lazily at record time (validateInputs), so launching the app doesn't litter
+    // the filesystem if recording is never used.
+    {
+        const QString defaultDir =
+            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+            + "/ADS1299 Recordings";
+        if (!defaultDir.isEmpty())
+            folderEdit_->setText(defaultDir);
+    }
     browseButton_ = new QPushButton("Browse…", this);
     browseButton_->setObjectName("browse");
     browseButton_->setFixedWidth(84);
@@ -173,10 +185,19 @@ bool RecordingPanel::validateInputs()
     }
 
     const QString folder = folderEdit_->text().trimmed();
+    if (folder.isEmpty()) {
+        QMessageBox::warning(this, "Validation Error", "Output folder must be set.");
+        folderEdit_->setFocus();
+        return false;
+    }
+    // Create the folder if it doesn't exist yet (the pre-filled default, or any new
+    // path the user typed) — standard recording-app behavior, and avoids creating it
+    // on launch when recording is never used.
+    QDir().mkpath(folder);
     const QFileInfo fi(folder);
-    if (folder.isEmpty() || !fi.isDir() || !fi.isWritable()) {
+    if (!fi.isDir() || !fi.isWritable()) {
         QMessageBox::warning(this, "Validation Error",
-                             "Output folder must exist and be writable.");
+                             "Output folder could not be created or is not writable.");
         folderEdit_->setFocus();
         return false;
     }
