@@ -196,7 +196,7 @@ QStatusBar {
 }
 
 QStatusBar QLabel {
-    font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    font-family: Menlo, monospace;
     font-size: 11px;
     color: #8b949e;
     padding: 0 4px;

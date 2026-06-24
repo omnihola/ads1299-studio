@@ -129,7 +129,7 @@ void RecordingPanel::buildUi()
     readoutLabel_ = new QLabel("--:-- | 0 samples", this);
     readoutLabel_->setObjectName("readoutLabel");
     readoutLabel_->setStyleSheet(
-        "font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 12px;");
+        "font-family: Menlo, monospace; font-size: 12px;");
     mainLayout->addWidget(readoutLabel_);
 
     mainLayout->addStretch();
