@@ -24,6 +24,7 @@
 #include <QSignalBlocker>
 #include <QSettings>
 #include <QCloseEvent>
+#include "app/SettingsKeys.h"
 
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
@@ -104,7 +105,7 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
 
     // Restore the last window size/position (if any). Empty on first launch →
     // restoreGeometry is a no-op and the default resize(1280, 800) above stands.
-    const QByteArray geo = QSettings().value("mainWindow/geometry").toByteArray();
+    const QByteArray geo = QSettings().value(settings::kWindowGeometry).toByteArray();
     if (!geo.isEmpty()) {
         restoreGeometry(geo);
     }
@@ -115,7 +116,7 @@ MainWindow::~MainWindow() = default;
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     // Persist window size/position so the app reopens where the user left it.
-    QSettings().setValue("mainWindow/geometry", saveGeometry());
+    QSettings().setValue(settings::kWindowGeometry, saveGeometry());
     QMainWindow::closeEvent(event);
 }
 

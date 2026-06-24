@@ -20,6 +20,8 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
+
+#include "app/SettingsKeys.h"
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -79,7 +81,7 @@ void RecordingPanel::buildUi()
     // the filesystem if recording is never used.
     {
         // Prefer the folder the user last used (persisted), else a sensible default.
-        const QString saved = QSettings().value("recording/outputFolder").toString();
+        const QString saved = QSettings().value(settings::kRecordingOutputFolder).toString();
         const QString defaultDir =
             QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
             + "/ADS1299 Recordings";
@@ -218,7 +220,7 @@ void RecordingPanel::onRecordClicked()
     const QString subjectId = subjectIdEdit_->text().trimmed();
     const QString folder    = folderEdit_->text().trimmed();
     // Remember this (validated) folder so the next launch defaults to it.
-    QSettings().setValue("recording/outputFolder", folder);
+    QSettings().setValue(settings::kRecordingOutputFolder, folder);
     const QString ts        = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
     const QString basePath  = folder + "/" + subjectId + "_" + ts;
 
@@ -273,7 +275,7 @@ void RecordingPanel::onBrowseClicked()
     if (!dir.isEmpty()) {
         folderEdit_->setText(dir);
         // Persist the explicit user choice immediately.
-        QSettings().setValue("recording/outputFolder", dir);
+        QSettings().setValue(settings::kRecordingOutputFolder, dir);
     }
 }
 

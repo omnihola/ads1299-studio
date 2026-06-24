@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include "app/SessionController.h"
+#include "app/SettingsKeys.h"
 #include "ui/theme/Theme.h"
 
 namespace studio {
@@ -54,8 +55,8 @@ AcquisitionPanel::AcquisitionPanel(SessionController* controller, QWidget* paren
     DeviceConfig cfg = controller_->config();
     {
         const QSettings s;
-        const int savedSps  = s.value("acq/sampleRate", -1).toInt();
-        const int savedGain = s.value("acq/gain", -1).toInt();
+        const int savedSps  = s.value(settings::kAcqSampleRate, -1).toInt();
+        const int savedGain = s.value(settings::kAcqGain, -1).toInt();
         if (spsCombo_->findData(savedSps) >= 0 && gainCombo_->findData(savedGain) >= 0) {
             cfg = cfg.withSampleRate(savedSps);
             for (int c = 0; c < 8; ++c)
@@ -230,8 +231,8 @@ void AcquisitionPanel::onComboChanged()
 
     // Remember the choice so the next launch defaults to it.
     QSettings s;
-    s.setValue("acq/sampleRate", sps);
-    s.setValue("acq/gain", gain);
+    s.setValue(settings::kAcqSampleRate, sps);
+    s.setValue(settings::kAcqGain, gain);
 }
 
 void AcquisitionPanel::onConfigChanged(studio::DeviceConfig cfg)
