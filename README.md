@@ -1,5 +1,7 @@
 # ADS1299 Studio
 
+[![CI](https://github.com/omnihola/ads1299-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/omnihola/ads1299-studio/actions/workflows/ci.yml)
+
 A research‑grade, native **macOS / Qt6** desktop application for acquiring, monitoring, and recording 8‑channel EEG from the Texas Instruments **ADS1299** analog front‑end (ADS1299EEGFE‑PDK).
 
 It provides a modern dark "scientific instrument" UI with GPU‑accelerated real‑time waveforms, full‑fidelity raw‑data recording (BDF+ / CSV / JSON), live signal‑quality tooling, and a clean hardware‑abstraction boundary so the same app runs against a built‑in simulator today and the real MMB0 hardware over USB.
