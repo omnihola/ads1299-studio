@@ -4,9 +4,11 @@
 
 #include "ui/AcquisitionPanel.h"
 
+#include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <cmath>
@@ -46,8 +48,21 @@ AcquisitionPanel::AcquisitionPanel(SessionController* controller, QWidget* paren
 {
     buildUi();
 
-    // Initial state from controller config
-    const DeviceConfig cfg = controller_->config();
+    // Initial state: prefer the user's last-used sample rate / gain (persisted),
+    // falling back to the controller's current config. Saved values are applied
+    // only if they are valid, supported combo entries (guards stale/bad settings).
+    DeviceConfig cfg = controller_->config();
+    {
+        const QSettings s;
+        const int savedSps  = s.value("acq/sampleRate", -1).toInt();
+        const int savedGain = s.value("acq/gain", -1).toInt();
+        if (spsCombo_->findData(savedSps) >= 0 && gainCombo_->findData(savedGain) >= 0) {
+            cfg = cfg.withSampleRate(savedSps);
+            for (int c = 0; c < 8; ++c)
+                cfg = cfg.withGain(c, savedGain);
+            controller_->applyConfig(cfg);   // not recording at startup → applies live
+        }
+    }
     {
         QSignalBlocker b1(spsCombo_);
         QSignalBlocker b2(gainCombo_);
@@ -212,6 +227,11 @@ void AcquisitionPanel::onComboChanged()
 
     controller_->applyConfig(cfg);
     refreshReadouts(gain, sps);
+
+    // Remember the choice so the next launch defaults to it.
+    QSettings s;
+    s.setValue("acq/sampleRate", sps);
+    s.setValue("acq/gain", gain);
 }
 
 void AcquisitionPanel::onConfigChanged(studio::DeviceConfig cfg)
