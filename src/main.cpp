@@ -22,6 +22,10 @@ int main(int argc, char** argv) {
 
     QApplication app(argc, argv);
 
+    // Identity for QSettings (persisted window geometry, user preferences).
+    QApplication::setOrganizationName("ADS1299Studio");
+    QApplication::setApplicationName("ads1299-studio");
+
     // Use the Fusion style so the custom dark stylesheet is honored fully and
     // consistently on every platform. The native macOS style draws some widgets
     // (notably the QTabWidget tab bar) with system chrome that overrides QSS

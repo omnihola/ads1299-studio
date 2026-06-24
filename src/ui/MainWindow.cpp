@@ -22,6 +22,8 @@
 #include <QShortcut>
 #include <QKeySequence>
 #include <QSignalBlocker>
+#include <QSettings>
+#include <QCloseEvent>
 
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
@@ -99,9 +101,23 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
         ShortcutsHelpDialog dlg(this);
         dlg.exec();
     });
+
+    // Restore the last window size/position (if any). Empty on first launch →
+    // restoreGeometry is a no-op and the default resize(1280, 800) above stands.
+    const QByteArray geo = QSettings().value("mainWindow/geometry").toByteArray();
+    if (!geo.isEmpty()) {
+        restoreGeometry(geo);
+    }
 }
 
 MainWindow::~MainWindow() = default;
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // Persist window size/position so the app reopens where the user left it.
+    QSettings().setValue("mainWindow/geometry", saveGeometry());
+    QMainWindow::closeEvent(event);
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Private builders

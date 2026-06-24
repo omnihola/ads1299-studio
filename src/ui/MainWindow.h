@@ -40,6 +40,10 @@ public:
     // Programmatically start streaming (used by --shot headless screenshot path)
     void startStreamingForDemo();
 
+protected:
+    // Persist window geometry on close (restored in the constructor).
+    void closeEvent(QCloseEvent* event) override;
+
 private slots:
     void onStartToggled(bool on);
     void onMetricsUpdated(studio::Metrics m);
