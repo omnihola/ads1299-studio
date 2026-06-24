@@ -1,10 +1,24 @@
 #include <QApplication>
 #include <QFile>
 #include <QPixmap>
+#include <QSurfaceFormat>
 #include <QTimer>
 #include "ui/MainWindow.h"
 
 int main(int argc, char** argv) {
+    // Set OpenGL Core profile BEFORE constructing QApplication so that
+    // QOpenGLWidget (GlWaveformWidget) gets a 3.3 Core context on macOS.
+    // On headless/offscreen (no GPU) this is a no-op — the widget degrades
+    // gracefully to a QPainter fallback.
+    {
+        QSurfaceFormat fmt;
+        fmt.setRenderableType(QSurfaceFormat::OpenGL);
+        fmt.setProfile(QSurfaceFormat::CoreProfile);
+        fmt.setVersion(3, 3);
+        fmt.setSwapInterval(1);
+        QSurfaceFormat::setDefaultFormat(fmt);
+    }
+
     QApplication app(argc, argv);
 
     // Apply dark studio theme
