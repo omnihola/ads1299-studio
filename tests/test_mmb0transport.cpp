@@ -92,6 +92,37 @@ private slots:
         QCOMPARE(df.buffered(), 2);
     }
 
+    // ── Deframer: oversized frame poison detection and resync ──────────────────
+    void deframerOversizedFrameResync()
+    {
+        MessageDeframer df;
+
+        // Craft a 4-byte buffer where the size field decodes to a huge value > kMaxFrameLen.
+        // size[4] = 0x40000001 (1 GiB + 1 byte) — well beyond the 1 MiB ceiling.
+        QByteArray poisoned(4, char(0x00));
+        auto* b = reinterpret_cast<uint8_t*>(poisoned.data());
+        b[0] = 0x01;  // little-endian low byte
+        b[1] = 0x00;
+        b[2] = 0x00;
+        b[3] = 0x40;  // high byte: 0x40000001 in LE
+
+        df.feed(poisoned);
+
+        // take() should detect oversized frame, clear the buffer, and return false.
+        QByteArray msg;
+        QVERIFY(!df.take(msg));
+        QCOMPARE(df.buffered(), 0);  // Buffer was cleared.
+
+        // Now feed a valid message and verify the stream has resynced.
+        QByteArray validFrame = makeFrame(8);
+        df.feed(validFrame);
+
+        // take() should succeed and return the valid message.
+        QVERIFY(df.take(msg));
+        QCOMPARE(msg.size(), 8);
+        QCOMPARE(msg, validFrame);
+    }
+
     // ── Device enumeration: must not crash ───────────────────────────────────
     void enumerationDoesNotCrash()
     {

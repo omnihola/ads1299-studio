@@ -14,6 +14,10 @@ namespace studio::styx {
 /// time via take().
 class MessageDeframer {
 public:
+    /// Upper bound on frame length to detect and discard corrupted/poisoned buffers.
+    /// 1 MiB is well above any reasonable 9P msize and serves as a poison detector.
+    static constexpr int kMaxFrameLen = 1 << 20;  // 1 MiB ceiling
+
     /// Append raw bytes received from the bulk-IN endpoint.
     void feed(const QByteArray& bytes)
     {
@@ -23,11 +27,20 @@ public:
     /// If at least one complete 9P message is buffered, move it into
     /// @p msg and return true.  Returns false (and leaves @p msg
     /// unchanged) when no complete message is available yet.
+    ///
+    /// If the frame size field decodes to an absurdly large value (> kMaxFrameLen),
+    /// the buffer is cleared (poisoned by corrupt size) and false is returned,
+    /// allowing the stream to resync on the next feed().
     bool take(QByteArray& msg)
     {
         int len = frameLength(buf_);   // returns -1 if < 4 bytes
         if (len <= 0)
             return false;
+        if (len > kMaxFrameLen) {
+            // Poisoned buffer: discard it so the stream can resync.
+            clear();
+            return false;
+        }
         if (buf_.size() < len)
             return false;
 
