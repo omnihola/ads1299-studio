@@ -13,7 +13,7 @@
 namespace studio::gl {
 
 // ---------------------------------------------------------------------------
-// X mapping
+// X mapping — stretch mode
 // ---------------------------------------------------------------------------
 // Maps sample position p (0=oldest, W-1=newest) in a window of W samples
 // to NDC x in [-1, +1].
@@ -24,6 +24,28 @@ inline float sampleIndexToNdcX(int p, int windowSamples)
         return -1.0f;
     }
     return -1.0f + 2.0f * static_cast<float>(p) / static_cast<float>(windowSamples - 1);
+}
+
+// ---------------------------------------------------------------------------
+// X mapping — scroll / right-aligned mode
+// ---------------------------------------------------------------------------
+// Maps buffered sample j (0=oldest, n-1=newest) to NDC x given a FIXED
+// window capacity W.  The newest sample (j == n-1) is always pinned at +1;
+// a sample W-1 positions back from the newest maps to exactly -1.  Samples
+// even older land at x < -1 and should be dropped by the caller.
+//
+// Formula:  x = +1 - 2*(n-1-j)/(W-1)
+//
+// Edge cases:
+//   W <= 1  → returns +1.0f (single-sample degenerate window)
+//   n < 1   → undefined; returns +1.0f (caller should guard n>=1)
+inline float sampleWindowToNdcX(int j, int n, int windowCapacity)
+{
+    if (windowCapacity <= 1) {
+        return 1.0f;
+    }
+    return 1.0f - 2.0f * static_cast<float>(n - 1 - j)
+                        / static_cast<float>(windowCapacity - 1);
 }
 
 // ---------------------------------------------------------------------------

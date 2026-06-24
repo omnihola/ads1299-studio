@@ -5,9 +5,11 @@
 #include "ui/gl/GlWaveformWidget.h"
 #include "ui/gl/WaveformTransform.h"
 #include "ui/theme/Theme.h"
+#include "core/dsp/Decimate.h"
 
 #include <QColor>
 #include <QOpenGLContext>
+#include <QVector>
 #include <QPainter>
 #include <algorithm>
 #include <cmath>
@@ -60,19 +62,22 @@ GlWaveformWidget::GlWaveformWidget(QWidget* parent)
 
 GlWaveformWidget::~GlWaveformWidget()
 {
-    // Destroy GL resources while the context is current.
-    makeCurrent();
-    if (program_) {
-        delete program_;
-        program_ = nullptr;
+    // Only touch GL resources if the context was successfully initialised and
+    // is still available.  On the no-GPU path (glOk_==false, offscreen QPA,
+    // CI headless) makeCurrent() may fail silently or crash, so we skip it.
+    if (glOk_ && context()) {
+        makeCurrent();
+        if (vbo_.isCreated()) {
+            vbo_.destroy();
+        }
+        if (vao_.isCreated()) {
+            vao_.destroy();
+        }
+        doneCurrent();
     }
-    if (vbo_.isCreated()) {
-        vbo_.destroy();
-    }
-    if (vao_.isCreated()) {
-        vao_.destroy();
-    }
-    doneCurrent();
+    // program_ is a QObject child — safe to delete without a current context.
+    delete program_;
+    program_ = nullptr;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -304,21 +309,42 @@ void GlWaveformWidget::buildNdcPoints(int channel,
         return;
     }
 
-    // Decide stride for decimation: keep at most maxPoints/2 vertices per
-    // channel (each vertex is 2 floats). Use stride-based decimation (take
-    // every stride-th sample) — sufficient for display; min/max would be
-    // better but adds complexity; keep it simple (KISS).
-    const int targetPts = std::max(2, maxPoints / 2);
-    const int stride    = std::max(1, n / targetPts);
-    const int numOut    = (n + stride - 1) / stride; // ceil division
+    // Window capacity W is fixed regardless of how many samples have arrived so
+    // far.  The newest sample is always pinned at the right edge (+1); older
+    // samples scroll in from the right.  Samples whose position would land left
+    // of -1 (i.e. older than the window) are dropped.
+    const int W = windowCapacity(); // fixed anchor for X mapping
 
-    out.reserve(static_cast<size_t>(numOut) * 2);
+    // --- Min/max envelope decimation (preserves narrow EEG spikes) -----------
+    // Copy the ring buffer into a QVector<double> and call decimateMinMaxIndexed
+    // to get both the kept values and their original indices (positions within
+    // the n-sample window).
+    QVector<double> samples(n);
+    for (int i = 0; i < n; ++i) {
+        samples[i] = static_cast<double>(buf[static_cast<size_t>(i)]);
+    }
 
-    // We need to know the total rendered samples for X mapping.
-    // We map the actual sample positions to [0..N-1] where N is n.
-    for (int i = 0; i < n; i += stride) {
-        const float x = sampleIndexToNdcX(i, n);
-        const float y = microvoltsToNdcY(static_cast<double>(buf[static_cast<size_t>(i)]),
+    const studio::DecimatedSeries ds = studio::decimateMinMaxIndexed(samples, maxPoints);
+    const int kept = ds.values.size();
+    if (kept < 1) {
+        return;
+    }
+
+    out.reserve(static_cast<size_t>(kept) * 2);
+
+    // --- Right-aligned X mapping ----------------------------------------------
+    // j=0 is the oldest buffered sample (index 0 in the ring), j=n-1 is newest.
+    // The newest sample maps to x = +1.
+    // A sample j positions back from the newest maps to:
+    //   x = +1 - 2*(n-1-j)/(W-1)
+    // Samples with x < -1 are older than the visible window → drop them.
+    for (int k = 0; k < kept; ++k) {
+        const int   j = ds.indices[k];  // position in the n-sample ring
+        const float x = sampleWindowToNdcX(j, n, W);
+        if (x < -1.0f) {
+            continue; // older than the visible window
+        }
+        const float y = microvoltsToNdcY(ds.values[k],
                                          channel,
                                          channelCount_,
                                          uvPerDiv_,

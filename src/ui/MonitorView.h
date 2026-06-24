@@ -83,7 +83,6 @@ private:
     int    sampleRateHz_   = 250;
 
     // ---- Constants ----------------------------------------------------------
-    static constexpr double kChannelSpacingUv   = 300.0; // preserved (used by offsetUv callers)
     static constexpr int    kRenderIntervalMs   = 33;    // ~30 fps
     static constexpr int    kNumChannels        = 8;
 };
