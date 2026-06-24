@@ -19,6 +19,12 @@ set_target_properties(test_scaleconverter PROPERTIES AUTOMOC ON)
 target_link_libraries(test_scaleconverter PRIVATE studio_core Qt6::Test)
 add_test(NAME test_scaleconverter COMMAND test_scaleconverter)
 
+add_executable(test_decimate test_decimate.cpp)
+set_target_properties(test_decimate PROPERTIES AUTOMOC ON)
+target_link_libraries(test_decimate PRIVATE studio_core Qt6::Test)
+target_include_directories(test_decimate PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME test_decimate COMMAND test_decimate)
+
 add_executable(test_simulatedsource test_simulatedsource.cpp)
 set_target_properties(test_simulatedsource PROPERTIES AUTOMOC ON)
 target_link_libraries(test_simulatedsource PRIVATE studio_core Qt6::Test)
