@@ -64,9 +64,9 @@ private slots:
     void immutability()
     {
         DeviceConfig a;
-        const auto b = a.withSampleRate(500);
-        QCOMPARE(a.sampleRate(), 250);
-        QCOMPARE(b.sampleRate(), 500);
+        const auto b = a.withSampleRate(1000);
+        QCOMPARE(a.sampleRate(), 500);
+        QCOMPARE(b.sampleRate(), 1000);
     }
 };
 

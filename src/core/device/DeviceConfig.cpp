@@ -12,7 +12,7 @@ namespace studio {
 // ---------------------------------------------------------------------------
 
 DeviceConfig::DeviceConfig()
-    : m_sampleRate(250)
+    : m_sampleRate(500)
     , m_srb1(false)
     , m_biasEnabled(true)
 {
