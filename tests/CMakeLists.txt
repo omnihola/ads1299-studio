@@ -107,3 +107,8 @@ add_executable(test_libusb_smoke test_libusb_smoke.cpp)
 set_target_properties(test_libusb_smoke PROPERTIES AUTOMOC ON)
 target_link_libraries(test_libusb_smoke PRIVATE studio_core Qt6::Test)
 add_test(NAME test_libusb_smoke COMMAND test_libusb_smoke)
+
+add_executable(test_styx9p test_styx9p.cpp)
+set_target_properties(test_styx9p PROPERTIES AUTOMOC ON)
+target_link_libraries(test_styx9p PRIVATE studio_core Qt6::Test)
+add_test(NAME test_styx9p COMMAND test_styx9p)
