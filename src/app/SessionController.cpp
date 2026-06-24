@@ -290,7 +290,8 @@ bool SessionController::connectMmb0()
 // ---------------------------------------------------------------------------
 
 bool SessionController::startRecording(const QString& basePath,
-                                       const SessionMetadata& meta)
+                                       const SessionMetadata& meta,
+                                       bool writeCsv)
 {
     if (state_.load(std::memory_order_relaxed) != State::Streaming) {
         Logger::instance().log("warn", "SessionController.startRecording.notStreaming", {});
@@ -306,8 +307,8 @@ bool SessionController::startRecording(const QString& basePath,
     // Open the recorder ON the writer thread and capture the result.
     bool opened = false;
     QMetaObject::invokeMethod(recorder_,
-        [this, &basePath, &effectiveMeta, &opened]() {
-            opened = recorder_->open(basePath, effectiveMeta);
+        [this, &basePath, &effectiveMeta, &opened, writeCsv]() {
+            opened = recorder_->open(basePath, effectiveMeta, writeCsv);
         },
         Qt::BlockingQueuedConnection);
 

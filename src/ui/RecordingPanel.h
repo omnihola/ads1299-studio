@@ -75,6 +75,7 @@ private:
 
     // Signal-quality gate
     QCheckBox*      skipQualityCheckBox_ = nullptr;
+    QCheckBox*      writeCsvCheckBox_    = nullptr;
     uint8_t         lastLeadOffP_        = 0;
     uint8_t         lastLeadOffN_        = 0;
 };

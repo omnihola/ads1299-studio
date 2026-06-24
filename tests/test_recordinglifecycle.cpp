@@ -109,6 +109,37 @@ private slots:
         edfclose_file(rh);
     }
 
+    // With writeCsv=false the BDF + meta.json are still written, but the large
+    // per-sample CSV is skipped (for long/high-rate sessions). meta.json's
+    // csvFile must be empty so the metadata stays honest.
+    void recordingWithoutCsvSkipsCsvFile()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString basePath = dir.filePath("nocsv_sess");
+
+        auto meta = SessionMetadata().withSubjectId("NoCsv").withSampleRate(250);
+
+        Recorder rec;
+        QVERIFY(rec.open(basePath, meta, /*writeCsv=*/false));
+        EegFrameBatch batch;
+        EegFrame f{};
+        f.seq = 0;
+        batch.push_back(f);
+        rec.writeBatch(batch);
+        rec.close();
+
+        QVERIFY2(QFile::exists(basePath + ".bdf"),  "BDF must still be written");
+        QVERIFY2(QFile::exists(basePath + ".meta.json"), "meta.json must still be written");
+        QVERIFY2(!QFile::exists(basePath + ".csv"), "CSV must NOT be written when disabled");
+
+        QFile mf(basePath + ".meta.json");
+        QVERIFY(mf.open(QIODevice::ReadOnly));
+        const QJsonObject obj = QJsonDocument::fromJson(mf.readAll()).object();
+        QVERIFY2(obj["csvFile"].toString().isEmpty(),
+                 "meta.json csvFile must be empty when CSV is disabled");
+    }
+
     void recordingLifecycleEndToEnd()
     {
         // Arrange — controller streaming from a deterministic simulated source.

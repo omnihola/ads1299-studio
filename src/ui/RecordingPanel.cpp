@@ -111,6 +111,14 @@ void RecordingPanel::buildUi()
     skipQualityCheckBox_->setChecked(false);
     mainLayout->addWidget(skipQualityCheckBox_);
 
+    writeCsvCheckBox_ = new QCheckBox("Write per-sample CSV (large at high rates)", this);
+    writeCsvCheckBox_->setObjectName("writeCsv");
+    writeCsvCheckBox_->setChecked(true);  // on by default — BDF is always written
+    writeCsvCheckBox_->setToolTip(
+        "Also write the full per-sample CSV alongside the lossless BDF. "
+        "Uncheck for long/high-rate sessions to save disk and CPU (BDF is unaffected).");
+    mainLayout->addWidget(writeCsvCheckBox_);
+
     // ── Control buttons ──
     auto* controls = new QHBoxLayout;
 
@@ -271,7 +279,7 @@ void RecordingPanel::onRecordClicked()
         .withSampleRate(sr)
         .withStartTimeUtc(now.toUTC().toString(Qt::ISODateWithMs));
 
-    if (!controller_->startRecording(basePath, meta)) {
+    if (!controller_->startRecording(basePath, meta, writeCsvCheckBox_->isChecked())) {
         QMessageBox::critical(this, "Recording Error",
                               "Failed to start recording. Streaming must be active "
                               "and the output folder writable.");

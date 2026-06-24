@@ -32,8 +32,9 @@ Recorder::~Recorder()
 
 // ─── open ────────────────────────────────────────────────────────────────────
 
-bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
+bool Recorder::open(const QString& basePath, const SessionMetadata& meta, bool writeCsv)
 {
+    writeCsv_ = writeCsv;
     if (basePath.isEmpty()) {
         emit errorOccurred("Recorder::open — basePath is empty");
         return false;
@@ -136,28 +137,30 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     recBuf_.fill(0);
     recBufFilled_ = 0;
 
-    // ── 4. Open CSV ───────────────────────────────────────────────────────────
-    QString csvPath = basePath_ + ".csv";
-    csvFile_.setFileName(csvPath);
-    if (!csvFile_.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QString msg = QString("Recorder::open — cannot open CSV: %1").arg(csvPath);
-        edfclose_file(edfHandle_);
-        edfHandle_ = -1;
-        emit errorOccurred(msg);
-        Logger::instance().log("error", "recorder.open.csv_open_failed", {{"path", csvPath}});
-        return false;
-    }
-    csvStream_.setDevice(&csvFile_);
+    // ── 4. Open CSV (unless disabled — the per-sample CSV is large at high rates) ─
+    if (writeCsv_) {
+        QString csvPath = basePath_ + ".csv";
+        csvFile_.setFileName(csvPath);
+        if (!csvFile_.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QString msg = QString("Recorder::open — cannot open CSV: %1").arg(csvPath);
+            edfclose_file(edfHandle_);
+            edfHandle_ = -1;
+            emit errorOccurred(msg);
+            Logger::instance().log("error", "recorder.open.csv_open_failed", {{"path", csvPath}});
+            return false;
+        }
+        csvStream_.setDevice(&csvFile_);
 
-    // Write CSV header (research-grade: absolute timestamp, raw counts, µV, status, flag)
-    csvStream_ << "timestamp_utc,seq,t_seconds,statP,statN,gpio";
-    for (int c = 0; c < kChannels; ++c) {
-        csvStream_ << ",ch" << c << "_raw";
+        // Write CSV header (research-grade: absolute timestamp, raw counts, µV, status, flag)
+        csvStream_ << "timestamp_utc,seq,t_seconds,statP,statN,gpio";
+        for (int c = 0; c < kChannels; ++c) {
+            csvStream_ << ",ch" << c << "_raw";
+        }
+        for (int c = 0; c < kChannels; ++c) {
+            csvStream_ << ",ch" << c << "_uV";
+        }
+        csvStream_ << ",flag\n";
     }
-    for (int c = 0; c < kChannels; ++c) {
-        csvStream_ << ",ch" << c << "_uV";
-    }
-    csvStream_ << ",flag\n";
 
     // ── 5. Write initial meta.json ────────────────────────────────────────────
     writeMetaJson(false);
@@ -251,9 +254,11 @@ void Recorder::close()
         edfHandle_ = -1;
     }
 
-    // Flush & close CSV
-    csvStream_.flush();
-    csvFile_.close();
+    // Flush & close CSV (only if it was opened)
+    if (writeCsv_ && csvFile_.isOpen()) {
+        csvStream_.flush();
+        csvFile_.close();
+    }
 
     // Rewrite meta.json with final stats
     writeMetaJson(true);
@@ -283,6 +288,7 @@ void Recorder::flushOneRecord()
 
 void Recorder::writeCsvRow(const EegFrame& frame, quint64 timelineIdx)
 {
+    if (!writeCsv_) return;
     const double tSeconds = static_cast<double>(timelineIdx) / static_cast<double>(sampleRate_);
 
     // Compute absolute UTC timestamp for this sample.
@@ -323,6 +329,7 @@ void Recorder::writeCsvRow(const EegFrame& frame, quint64 timelineIdx)
 
 void Recorder::writeGapCsvRow(quint64 timelineIdx)
 {
+    if (!writeCsv_) return;
     // Gap rows: seq/statP/statN/gpio blank, all channel counts 0, flag "drop_pad".
     const double tSeconds = static_cast<double>(timelineIdx) / static_cast<double>(sampleRate_);
 
@@ -362,7 +369,8 @@ void Recorder::writeMetaJson(bool isFinal)
     QJsonObject obj = meta_.toJson();
 
     obj["bdfFile"] = QFileInfo(basePath_ + ".bdf").fileName();
-    obj["csvFile"] = QFileInfo(basePath_ + ".csv").fileName();
+    // Empty when the per-sample CSV was disabled, so the metadata stays honest.
+    obj["csvFile"] = writeCsv_ ? QFileInfo(basePath_ + ".csv").fileName() : QString();
     obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
     obj["paddedSamples"]          = static_cast<qint64>(paddedSamples_);
     obj["annotations"] = annotations_.toJson();

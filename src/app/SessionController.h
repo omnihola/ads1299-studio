@@ -73,7 +73,8 @@ public:
     // Returns false if not currently Streaming or if the recorder fails to open.
     // On success sets state to Recording, starts the record clock, and emits
     // stateChanged + recordingChanged(true). Recorder I/O runs on writerThread_.
-    bool     startRecording(const QString& basePath, const SessionMetadata& meta);
+    bool     startRecording(const QString& basePath, const SessionMetadata& meta,
+                            bool writeCsv = true);
     void     stopRecording();
     void     addMarker(const QString& label);
     quint64  recordedSamples() const;  // 0 unless currently Recording

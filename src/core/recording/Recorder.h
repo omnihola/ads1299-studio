@@ -63,10 +63,12 @@ public:
 
     /**
      * Opens the recording at \p basePath (no extension).
-     * Creates basePath.bdf, basePath.csv, and basePath.meta.json.
+     * Creates basePath.bdf and basePath.meta.json; also basePath.csv unless
+     * \p writeCsv is false (the per-sample CSV is large at high sample rates, so
+     * callers may skip it and keep only the lossless BDF).
      * @return true on success, false on error (emits errorOccurred).
      */
-    bool open(const QString& basePath, const SessionMetadata& meta);
+    bool open(const QString& basePath, const SessionMetadata& meta, bool writeCsv = true);
 
     /**
      * Finalises the BDF+ file, flushes and closes the CSV, rewrites meta.json
@@ -143,6 +145,7 @@ private:
     int          recBufFilled_ = 0; // number of complete samples per channel
 
     // CSV
+    bool         writeCsv_ = true;  // when false, the per-sample CSV is skipped
     QFile        csvFile_;
     QTextStream  csvStream_;
 };
