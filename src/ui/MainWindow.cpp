@@ -23,6 +23,7 @@
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "ui/AcquisitionPanel.h"
 #include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
@@ -161,15 +162,14 @@ void MainWindow::buildToolbar()
 
 void MainWindow::buildDock()
 {
-    auto* dock = new QDockWidget("Configuration", this);
+    auto* dock = new QDockWidget("Acquisition", this);
     dock->setObjectName("configDock");
     dock->setAllowedAreas(Qt::LeftDockWidgetArea);
     dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
 
-    // Placeholder — Task 17 will replace this with the real config panel
-    auto* placeholder = new QWidget(dock);
-    placeholder->setObjectName("configPlaceholder");
-    dock->setWidget(placeholder);
+    auto* acqPanel = new AcquisitionPanel(controller_, dock);
+    acqPanel->setObjectName("acquisitionPanel");
+    dock->setWidget(acqPanel);
 
     addDockWidget(Qt::LeftDockWidgetArea, dock);
 }

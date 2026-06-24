@@ -1,0 +1,27 @@
+
+Basic idea: we "sample" the current list of available connections.  We get then a copy of the list of available connections.  This contains connection objects.  It is a copy.  The functions we provide iterate through this copy.  When we are done iterating we must dispose of the list.  This goes through the list and deletes all the connection objects in it that have not been opened.  If a connection object has been opened, we assume that the user has it.  To close a connection object you must delete it.
+
+so:
+
+- call cstyx_get_connections_list
+- iterate using cstyx_get_first_connection and cstyx_get_next_connection and cstyx_is_last_connection
+- pick out the connection you want
+- attach a client to it using cstyx_attach_client
+  - this opens the connection, creates a new client, and associates the connection with it
+- call cstyx_delete_connections_list
+  - this deletes the Connections that were not opened, and then deletes the list itself
+- communicate
+- when we are done with the client call cstyx_close_client
+  - this closes the client and deletes the connection object
+
+*** how this is implemented:
+
+ConnectionList is a subclass of vector<Connection*>.  When the list is "sampled", ConnectionList calls a static method called registerConnections which is found in registerConnections.cc.  This file contains the registerConnections function.  It calls the various connection module files and so must be updated for each build.  Each of these has its own registerConnections method which does whatever it needs to do to add itself to the ConnectionList, which is passed as an arg.
+
+** when do we register connections?
+
+A connection may appear or disappear at any time
+When a connection appears, it should appear in the list.  To do this we have to poll as there is no guarantee that we can get notifications about this
+When a connection disappears -- same applies, but:
+  - we must never ever delete a connection object that was opened but has become invalid.  Instead we can throw an error
+  - If a connection object has never been opened we can safely delete it

@@ -1,0 +1,22 @@
+
+CC=gcc
+CXX=g++
+pyrex=pyrexc
+pyinc=/usr/include/python2.4
+CPPFLAGS=-Ilocal -I$(pyinc)
+CCFLAGS=-I$(pyinc)
+
+pystyx.c: pystyx.pyx
+	$(pyrex) pystyx.pyx
+
+objs=cstyx.o cstyx_c.o pathutil.o pystyx.o \
+	RegisterConnections.o LocalConnection.o
+
+pystyx.dll: $(objs) local/estest.a
+	$(CXX) -g -shared $(objs) -L/usr/lib/python2.4/config local/estest.a -lpython2.4 -o pystyx.dll
+
+local/estest.a:
+	$(MAKE) -c local estest.a
+
+clean:
+	- rm -f $(objs) pystyx.dll

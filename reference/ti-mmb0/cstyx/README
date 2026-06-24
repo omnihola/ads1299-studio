@@ -1,0 +1,53 @@
+
+===========================
+estyx: embedded Styx server version 0.1.0
+===========================
+
+estyx is a set of C functions which implement a server for the Styx / 9P2000 remote file protocol.  It is designed to serve synthetic device files, rather than to interface to an existing filesystem.
+
+estyx is designed to be used in embedded systems, and is intended to be portable and operating system independent; it relies only on dynamic memory allocation, and does not require threads (although it is thread-safe).
+
+estyx is also protocol agnostic.  The server communicates through functions and callbacks.  Any suitable transport may be connected to it.
+
+Installation
+------------
+
+estyx is distributed as source code.  It is intended to be copied into a project.  As such there is no specific installation procedure; simply copy the files in src/ to your project.
+
+estest
+------
+
+This distribution contains a library called "estest", which implements a demonstration estyx server on a PC.
+
+estest is included in the cstyx library (cstyx.berlios.de) and is part of styxsh, which is distributed with cstyx.  See http://cstyx.berlios.de/ for more information.
+
+Files
+-----
+
+The distribution contains the following:
+
+doc/ - Documentation
+src/ - Source code and header files
+estest/ - A tester
+README - This file
+VERSION - Version number
+LICENSE - Common Public License 1.0
+
+Documentation
+-------------
+
+At present, estyx has little documentation.  The API is partly documented 
+in Doxygen-formatted comments in the header files.
+
+Contributions to the documentation (or any other part of estyx) are welcomed
+and solicited.
+
+About
+-----
+
+estyx began with code from libstyx, which is part of the Inferno operating system, 4th edition (www.vitanuova.com).  This code, which is distributed under a BSD-style license, was heavily modified in estyx, but some parts of libstyx remain more or less intact, in particular the marshalling-unmarshalling code.
+
+Written by Michael Ashton <mpashton@users.berlios.de>
+(c) 2005-2006 Texas Instruments Inc.
+Portions (c) 1994-1999 Lucent Technologies Inc.
+Portions (c) 2000-2005 Vita Nuova Holdings Ltd.
