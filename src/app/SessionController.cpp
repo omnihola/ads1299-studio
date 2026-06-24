@@ -344,6 +344,13 @@ void SessionController::stopRecording()
                            QJsonObject{{"markerCount", markerCount_}});
 }
 
+int SessionController::markerCount() const
+{
+    // Reset on startRecording and only mutated from the GUI thread (addMarker),
+    // same thread as the readout that reads it — no synchronization needed.
+    return markerCount_;
+}
+
 void SessionController::addMarker(const QString& label)
 {
     if (state_.load(std::memory_order_relaxed) != State::Recording) return;

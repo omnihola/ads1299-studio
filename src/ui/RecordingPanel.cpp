@@ -343,12 +343,14 @@ void RecordingPanel::updateReadout()
     const int minutes = static_cast<int>(totalSec / 60);
     const int seconds = static_cast<int>(totalSec % 60);
     const quint64 samples = controller_->recordedSamples();
+    const int     markers = controller_->markerCount();
 
     readoutLabel_->setText(
-        QString("%1:%2 | %3 samples")
+        QString("%1:%2 | %3 samples | %4 markers")
             .arg(minutes, 2, 10, QChar('0'))
             .arg(seconds, 2, 10, QChar('0'))
-            .arg(samples));
+            .arg(samples)
+            .arg(markers));
 }
 
 void RecordingPanel::onExportClicked()

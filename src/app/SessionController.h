@@ -77,6 +77,7 @@ public:
     void     stopRecording();
     void     addMarker(const QString& label);
     quint64  recordedSamples() const;  // 0 unless currently Recording
+    int      markerCount()     const;  // event markers added in the current session
 
     // ---- Source swap -------------------------------------------------------
     // Swap to a new IDataSource at runtime (e.g. switching from Simulated to
