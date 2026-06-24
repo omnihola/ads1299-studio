@@ -187,3 +187,13 @@ target_include_directories(test_alertbar PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_alertbar PRIVATE studio_core Qt6::Widgets Qt6::Test)
 add_test(NAME test_alertbar COMMAND test_alertbar)
 set_tests_properties(test_alertbar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_prerecordcheck
+    test_prerecordcheck.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/PreRecordCheckDialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/theme/LedIndicator.cpp)
+set_target_properties(test_prerecordcheck PROPERTIES AUTOMOC ON)
+target_include_directories(test_prerecordcheck PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_prerecordcheck PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_prerecordcheck COMMAND test_prerecordcheck)
+set_tests_properties(test_prerecordcheck PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

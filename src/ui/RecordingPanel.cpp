@@ -3,7 +3,9 @@
 // See RecordingPanel.h for the public contract.
 
 #include "ui/RecordingPanel.h"
+#include "ui/PreRecordCheckDialog.h"
 
+#include <QCheckBox>
 #include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
@@ -83,6 +85,12 @@ void RecordingPanel::buildUi()
 
     mainLayout->addLayout(form);
 
+    // ── Signal-quality gate option ──
+    skipQualityCheckBox_ = new QCheckBox("Skip pre-recording signal check", this);
+    skipQualityCheckBox_->setObjectName("skipQualityCheck");
+    skipQualityCheckBox_->setChecked(false);
+    mainLayout->addWidget(skipQualityCheckBox_);
+
     // ── Control buttons ──
     auto* controls = new QHBoxLayout;
 
@@ -136,6 +144,12 @@ void RecordingPanel::wireSignals()
             this, [this](const studio::DeviceConfig& cfg) {
         sampleRateLabel_->setText(QString("%1 Hz").arg(cfg.sampleRate()));
     });
+    // Cache latest lead-off bits for the pre-recording quality gate.
+    connect(controller_, &SessionController::metricsUpdated,
+            this, [this](const studio::Metrics& m) {
+        lastLeadOffP_ = m.leadOffP;
+        lastLeadOffN_ = m.leadOffN;
+    });
 }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
@@ -182,6 +196,15 @@ void RecordingPanel::onRecordClicked()
         .withNotes(notesEdit_->toPlainText())
         .withSampleRate(sr)
         .withStartTimeUtc(QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+
+    // ── Signal-quality gate ──────────────────────────────────────────────────
+    // Show the per-channel lead-off dialog unless the operator opted out.
+    // The headless path (controller_->startRecording called directly in tests)
+    // bypasses this gate entirely — it lives only in the UI flow.
+    if (!skipQualityCheckBox_->isChecked()) {
+        PreRecordCheckDialog dlg(lastLeadOffP_, lastLeadOffN_, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+    }
 
     if (!controller_->startRecording(basePath, meta)) {
         QMessageBox::critical(this, "Recording Error",
