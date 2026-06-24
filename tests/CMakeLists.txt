@@ -112,3 +112,8 @@ add_executable(test_styx9p test_styx9p.cpp)
 set_target_properties(test_styx9p PROPERTIES AUTOMOC ON)
 target_link_libraries(test_styx9p PRIVATE studio_core Qt6::Test)
 add_test(NAME test_styx9p COMMAND test_styx9p)
+
+add_executable(test_styx9pclient test_styx9pclient.cpp)
+set_target_properties(test_styx9pclient PROPERTIES AUTOMOC ON)
+target_link_libraries(test_styx9pclient PRIVATE studio_core Qt6::Test)
+add_test(NAME test_styx9pclient COMMAND test_styx9pclient)
