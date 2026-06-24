@@ -9,7 +9,7 @@ namespace studio {
 
 /// Immutable high-level configuration of an ADS1299 device.
 ///
-/// Defaults: 250 SPS, all channels gain=24 mux=0 (normal electrode),
+/// Defaults: 500 SPS, all channels gain=24 mux=0 (normal electrode),
 /// srb1=false, biasEnabled=true.
 ///
 /// with* methods return a new copy with the requested field changed;
