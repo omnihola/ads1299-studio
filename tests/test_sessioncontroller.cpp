@@ -149,6 +149,44 @@ private slots:
 
         ctrl.stopStreaming();
     }
+
+    // -----------------------------------------------------------------------
+    // Test 8: per-session integrity counters reset across stop/start
+    //
+    // FIX 1 verification: droppedSamples_ must be 0 after a stop→start cycle
+    // even if a gap was introduced in the previous session.  Before the fix
+    // the counter was cumulative and the old value persisted into the next run.
+    // -----------------------------------------------------------------------
+    void test_dropCountResetsAcrossSessions()
+    {
+        studio::SessionController ctrl(new studio::SimulatedSource(8));
+
+        // Session 1: inject a seq gap so droppedSamples becomes > 0.
+        // Batch A: seq 0,1,2  → firstFrame_ initialised, expectedSeq_=3, drops=0
+        // Batch B: seq 5,6    → gap of 2 (seq 3 and 4 missing) → drops=2
+        ctrl.onFrames(makeBatch({0, 1, 2}));
+        QCOMPARE(ctrl.droppedSamples(), uint64_t(0));
+
+        ctrl.onFrames(makeBatch({5, 6}));
+        QVERIFY2(ctrl.droppedSamples() > 0,
+                 "Expected droppedSamples > 0 after a seq gap in session 1");
+
+        // Simulate stop/start: the controller must reset its counters at
+        // startStreaming().  We call startStreaming() but don't want to block
+        // waiting for the worker thread — stopStreaming() first (Idle guard),
+        // then re-check the counter immediately after startStreaming() returns
+        // (the reset happens before the thread is launched).
+        //
+        // Note: ctrl.state() is Idle (we never called startStreaming before),
+        // so startStreaming() will transition Idle→Streaming and reset counters.
+        ctrl.startStreaming();
+
+        // The counter reset happens synchronously at the top of startStreaming()
+        // before any worker thread activity.
+        QCOMPARE(ctrl.droppedSamples(), uint64_t(0));
+
+        ctrl.stopStreaming();
+    }
 };
 
 QTEST_MAIN(TestSessionController)

@@ -31,10 +31,6 @@ AlertBar::AlertBar(SessionController* controller, QWidget* parent)
     layout->addWidget(dot_);
 
     label_ = new QLabel(this);
-    const QString monoStyle =
-        QString("font-family: %1; font-size: 12px;")
-        .arg(theme::kMonoFamily);
-    label_->setStyleSheet(monoStyle);
     layout->addWidget(label_);
     layout->addStretch();
 
@@ -46,8 +42,6 @@ AlertBar::AlertBar(SessionController* controller, QWidget* parent)
                 this, &AlertBar::onErrorOccurred);
         connect(controller, &SessionController::stateChanged,
                 this, &AlertBar::onStateChanged);
-        connect(controller, &SessionController::recordingChanged,
-                this, &AlertBar::onRecordingChanged);
     }
 
     refresh();
@@ -119,23 +113,20 @@ void AlertBar::onErrorOccurred(const QString& message)
     refresh();
 }
 
-void AlertBar::onStateChanged(studio::State state)
+void AlertBar::onStateChanged(studio::State newState)
 {
-    // On a fresh start, clear the error and reset drop baseline
-    if (state == State::Streaming || state == State::Recording) {
+    // Only clear alerts on a genuine fresh start: Idle → Streaming.
+    // Transitions such as Streaming → Recording or Recording → Streaming
+    // (stop-record) must NOT wipe accumulated errors/drops.
+    if (newState == State::Streaming && previousState_ == State::Idle) {
         lastError_.clear();
+        // droppedSamples_ is now driven purely from metricsUpdated; the
+        // controller resets its counter at startStreaming() (FIX 1), so the
+        // first metricsUpdated after a fresh start will already carry 0.
         droppedSamples_ = 0;
         refresh();
     }
-}
-
-void AlertBar::onRecordingChanged(bool recording)
-{
-    if (recording) {
-        lastError_.clear();
-        droppedSamples_ = 0;
-        refresh();
-    }
+    previousState_ = newState;
 }
 
 // ── refresh ───────────────────────────────────────────────────────────────────
@@ -156,12 +147,12 @@ void AlertBar::refresh()
         dotColor  = theme::kOk;
         break;
     case AlertLevel::Warn:
-        bgColor   = "#2b2200";   // very dark amber tint
+        bgColor   = theme::kWarnBg;
         textColor = theme::kWarn;
         dotColor  = theme::kWarn;
         break;
     case AlertLevel::Error:
-        bgColor   = "#2d0b0b";   // very dark red tint
+        bgColor   = theme::kErrorBg;
         textColor = theme::kError;
         dotColor  = theme::kError;
         break;

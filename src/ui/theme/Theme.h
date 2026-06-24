@@ -16,6 +16,8 @@ inline constexpr const char* kOk          = "#3fb950";
 inline constexpr const char* kWarn        = "#d29922";
 inline constexpr const char* kError       = "#f85149";
 inline constexpr const char* kLedOff      = "#484f58";
+inline constexpr const char* kWarnBg      = "#2b2200";   // very dark amber tint
+inline constexpr const char* kErrorBg     = "#2d0b0b";   // very dark red tint
 
 // ── Font families ─────────────────────────────────────────────────────────────
 inline constexpr const char* kMonoFamily  = "\"SF Mono\", \"JetBrains Mono\", Menlo, monospace";

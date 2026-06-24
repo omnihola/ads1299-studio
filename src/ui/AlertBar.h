@@ -61,16 +61,16 @@ private slots:
     void onMetricsUpdated(studio::Metrics m);
     void onErrorOccurred(const QString& message);
     void onStateChanged(studio::State state);
-    void onRecordingChanged(bool recording);
 
 private:
     void refresh();
 
     // ── Persisted state ──────────────────────────────────────────────────────
-    QString  lastError_;
-    uint64_t droppedSamples_ = 0;
-    uint8_t  leadOffP_       = 0;
-    uint8_t  leadOffN_       = 0;
+    QString      lastError_;
+    uint64_t     droppedSamples_ = 0;
+    uint8_t      leadOffP_       = 0;
+    uint8_t      leadOffN_       = 0;
+    studio::State previousState_ = studio::State::Idle;
 
     // ── Computed summary ─────────────────────────────────────────────────────
     AlertSummary summary_;

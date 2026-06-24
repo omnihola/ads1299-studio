@@ -75,6 +75,57 @@ private slots:
         QVERIFY2(bar.currentSummary().text.contains("3"),
                  qPrintable(bar.currentSummary().text));
     }
+
+    // ------------------------------------------------------------------
+    // FIX 2 verification: recording transition must NOT wipe alerts
+    //
+    // Sequence:
+    //   1. Put the bar into Error state via applyForTest (dropped samples).
+    //   2. Simulate a Streaming→Recording transition by emitting
+    //      stateChanged(Recording) directly from the controller.
+    //   3. Assert the bar is still Error — the alert must not be cleared.
+    // ------------------------------------------------------------------
+    void test_recordingTransitionDoesNotWipeAlerts()
+    {
+        studio::SessionController ctrl(new studio::SimulatedSource(2));
+        studio::AlertBar bar(&ctrl);
+
+        // Step 1: put bar into Error state (dropped samples)
+        bar.applyForTest("", 5, 0, 0);
+        QCOMPARE(bar.currentSummary().level, studio::AlertLevel::Error);
+
+        // Step 2: emit stateChanged(Recording) — this fires onStateChanged on
+        // the bar.  The fix ensures we only clear on Idle→Streaming, not here.
+        emit ctrl.stateChanged(studio::State::Recording);
+        QCoreApplication::processEvents();
+
+        // Step 3: alert must still be Error
+        QCOMPARE(bar.currentSummary().level, studio::AlertLevel::Error);
+        QVERIFY2(bar.currentSummary().text.contains("5"),
+                 qPrintable(bar.currentSummary().text));
+    }
+
+    // ------------------------------------------------------------------
+    // FIX 2 verification: a genuine fresh start (Idle→Streaming) clears
+    // the error state.
+    // ------------------------------------------------------------------
+    void test_freshStartClearsError()
+    {
+        studio::SessionController ctrl(new studio::SimulatedSource(3));
+        studio::AlertBar bar(&ctrl);
+
+        // Put the bar into Error state first
+        bar.applyForTest("device lost", 0, 0, 0);
+        QCOMPARE(bar.currentSummary().level, studio::AlertLevel::Error);
+
+        // The bar's previousState_ starts as Idle.  Emit Streaming to simulate
+        // the Idle→Streaming transition.
+        emit ctrl.stateChanged(studio::State::Streaming);
+        QCoreApplication::processEvents();
+
+        // The error should now be cleared (fresh start)
+        QCOMPARE(bar.currentSummary().level, studio::AlertLevel::Ok);
+    }
 };
 
 QTEST_MAIN(TestAlertBar)
