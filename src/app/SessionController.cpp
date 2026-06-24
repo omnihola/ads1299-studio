@@ -165,6 +165,13 @@ void SessionController::startStreaming()
 {
     if (state_ != State::Idle) return;
 
+    // Reset per-session integrity counters so each streaming session starts
+    // fresh.  This prevents stale drop counts and seq-gap misdetection on
+    // stop/restart cycles (FIX 1).
+    droppedSamples_.store(0, std::memory_order_relaxed);
+    expectedSeq_ = 0;
+    firstFrame_  = true;
+
     setState(State::Streaming);
     Logger::instance().log("info", "SessionController.startStreaming", {});
 

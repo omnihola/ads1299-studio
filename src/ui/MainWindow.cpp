@@ -7,6 +7,7 @@
 #include <QAction>
 #include <QDockWidget>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QStatusBar>
@@ -23,11 +24,14 @@
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "ui/AlertBar.h"
 #include "ui/AcquisitionPanel.h"
 #include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
 #include "ui/RegistersView.h"
+#include "ui/SessionsView.h"
+#include "ui/ShortcutsHelpDialog.h"
 #include "ui/SpectrumView.h"
 
 namespace studio {
@@ -64,11 +68,34 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
     connect(diskTimer_, &QTimer::timeout, this, &MainWindow::refreshDiskLabel);
     diskTimer_->start();
 
-    // Global "M" shortcut — drops an event marker (only acts while recording;
-    // SessionController::addMarker is a no-op otherwise).
-    auto* markerShortcut = new QShortcut(QKeySequence(Qt::Key_M), this);
+    // Ctrl+M — add event marker (replaces bare Qt::Key_M to avoid firing in text fields).
+    // SessionController::addMarker is a no-op unless recording, so this is safe always.
+    auto* markerShortcut = new QShortcut(QKeySequence("Ctrl+M"), this);
     connect(markerShortcut, &QShortcut::activated, this, [this]() {
         controller_->addMarker("marker");
+    });
+
+    // Ctrl+P — pause / resume the Monitor display
+    auto* pauseShortcut = new QShortcut(QKeySequence("Ctrl+P"), this);
+    connect(pauseShortcut, &QShortcut::activated, this, [this]() {
+        if (monitorView_) {
+            monitorView_->togglePause();
+        }
+    });
+
+    // Ctrl+1..Ctrl+6 — switch between the six main tabs
+    for (int i = 0; i < 6; ++i) {
+        auto* sc = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i + 1)), this);
+        connect(sc, &QShortcut::activated, this, [this, i]() {
+            tabs_->setCurrentIndex(i);
+        });
+    }
+
+    // F1 — open the keyboard shortcuts help dialog
+    auto* helpShortcut = new QShortcut(QKeySequence(Qt::Key_F1), this);
+    connect(helpShortcut, &QShortcut::activated, this, [this]() {
+        ShortcutsHelpDialog dlg(this);
+        dlg.exec();
     });
 }
 
@@ -92,16 +119,27 @@ void MainWindow::buildToolbar()
 
     startAction_ = new QAction("Start", this);
     startAction_->setCheckable(true);
-    startAction_->setToolTip("Start / stop streaming");
+    startAction_->setShortcut(QKeySequence(Qt::Key_F5));
+    startAction_->setToolTip("Start / stop streaming (F5)");
 
     recordAction_ = new QAction("Record", this);
     recordAction_->setCheckable(true);
-    recordAction_->setToolTip("Start / stop recording");
+    recordAction_->setShortcut(QKeySequence("Ctrl+R"));
+    recordAction_->setToolTip("Start / stop recording (Ctrl+R)");
+
+    auto* helpAction = new QAction("Shortcuts", this);
+    helpAction->setToolTip("Keyboard shortcuts help (F1)");
+    connect(helpAction, &QAction::triggered, this, [this]() {
+        ShortcutsHelpDialog dlg(this);
+        dlg.exec();
+    });
 
     toolbar->addAction(connectAction_);
     toolbar->addSeparator();
     toolbar->addAction(startAction_);
     toolbar->addAction(recordAction_);
+    toolbar->addSeparator();
+    toolbar->addAction(helpAction);
 
     connect(startAction_, &QAction::toggled, this, &MainWindow::onStartToggled);
 
@@ -181,9 +219,9 @@ void MainWindow::buildTabs()
     tabs_->setDocumentMode(true);
 
     // Monitor tab — real-time 8-channel scrolling traces
-    auto* monitorView = new MonitorView(controller_, this);
-    monitorView->setObjectName("monitorTab");
-    tabs_->addTab(monitorView, "Monitor");
+    monitorView_ = new MonitorView(controller_, this);
+    monitorView_->setObjectName("monitorTab");
+    tabs_->addTab(monitorView_, "Monitor");
 
     // Registers tab — live DeviceConfig editor
     auto* registersView = new RegistersView(controller_, this);
@@ -205,7 +243,24 @@ void MainWindow::buildTabs()
     recordingPanel_->setObjectName("recordingTab");
     tabs_->addTab(recordingPanel_, "Recording");
 
-    setCentralWidget(tabs_);
+    // Sessions tab — browse/reveal/export past recordings.
+    sessionsView_ = new SessionsView(QString(), this);
+    sessionsView_->setObjectName("sessionsTab");
+    tabs_->addTab(sessionsView_, "Sessions");
+
+    // Wrap alert bar + tab widget in a container so the alert bar is always
+    // visible above all tabs.
+    auto* central  = new QWidget(this);
+    auto* vLayout  = new QVBoxLayout(central);
+    vLayout->setContentsMargins(0, 0, 0, 0);
+    vLayout->setSpacing(0);
+
+    alertBar_ = new AlertBar(controller_, central);
+    alertBar_->setObjectName("alertBar");
+    vLayout->addWidget(alertBar_);
+    vLayout->addWidget(tabs_);
+
+    setCentralWidget(central);
 }
 
 void MainWindow::buildStatusBar()

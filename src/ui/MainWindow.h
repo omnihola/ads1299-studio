@@ -11,15 +11,19 @@
 
 #include "app/AppState.h"          // studio::State, studio::Metrics
 #include "ui/theme/LedIndicator.h" // studio::LedIndicator
+#include "ui/AlertBar.h"           // studio::AlertBar
 
 class QAction;
+class QShortcut;
 class QTimer;
 
 namespace studio {
 
 class SessionController;
+class MonitorView;
 class RecordingPanel;
 class ImpedanceView;
+class SessionsView;
 
 class MainWindow : public QMainWindow
 {
@@ -58,14 +62,23 @@ private:
     QAction* startAction_    = nullptr;
     QAction* recordAction_   = nullptr;
 
+    // ---- Alert bar (above tabs) ---------------------------------------------
+    AlertBar* alertBar_ = nullptr;
+
     // ---- Central tab widget -------------------------------------------------
     QTabWidget* tabs_ = nullptr;
+
+    // ---- Monitor view (lives in the "Monitor" tab) --------------------------
+    MonitorView*    monitorView_    = nullptr;
 
     // ---- Recording panel (lives in the "Recording" tab) ---------------------
     RecordingPanel* recordingPanel_ = nullptr;
 
     // ---- Impedance view (lives in the "Impedance" tab) ----------------------
     ImpedanceView*  impedanceView_  = nullptr;
+
+    // ---- Sessions view (lives in the "Sessions" tab) ------------------------
+    SessionsView*   sessionsView_   = nullptr;
 
     // ---- Status bar widgets -------------------------------------------------
     LedIndicator* linkLed_      = nullptr;

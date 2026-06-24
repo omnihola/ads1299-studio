@@ -3,7 +3,9 @@
 // See RecordingPanel.h for the public contract.
 
 #include "ui/RecordingPanel.h"
+#include "ui/PreRecordCheckDialog.h"
 
+#include <QCheckBox>
 #include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
@@ -21,6 +23,7 @@
 
 #include "app/AppState.h"
 #include "app/SessionController.h"
+#include "core/recording/SessionExporter.h"
 #include "core/recording/SessionMetadata.h"
 
 namespace studio {
@@ -83,6 +86,12 @@ void RecordingPanel::buildUi()
 
     mainLayout->addLayout(form);
 
+    // ── Signal-quality gate option ──
+    skipQualityCheckBox_ = new QCheckBox("Skip pre-recording signal check", this);
+    skipQualityCheckBox_->setObjectName("skipQualityCheck");
+    skipQualityCheckBox_->setChecked(false);
+    mainLayout->addWidget(skipQualityCheckBox_);
+
     // ── Control buttons ──
     auto* controls = new QHBoxLayout;
 
@@ -109,6 +118,13 @@ void RecordingPanel::buildUi()
     controls->addStretch();
     mainLayout->addLayout(controls);
 
+    // ── Export button ──
+    exportButton_ = new QPushButton("Export session…", this);
+    exportButton_->setObjectName("exportSession");
+    exportButton_->setEnabled(false);  // enabled only after a session has been recorded
+    exportButton_->setToolTip("Copy session files (.bdf, .csv, .meta.json) to a chosen folder");
+    mainLayout->addWidget(exportButton_);
+
     // ── Live readout ──
     readoutLabel_ = new QLabel("--:-- | 0 samples", this);
     readoutLabel_->setObjectName("readoutLabel");
@@ -128,6 +144,7 @@ void RecordingPanel::wireSignals()
     connect(stopButton_,      &QPushButton::clicked, this, &RecordingPanel::onStopClicked);
     connect(addMarkerButton_, &QPushButton::clicked, this, &RecordingPanel::onAddMarkerClicked);
     connect(browseButton_,    &QPushButton::clicked, this, &RecordingPanel::onBrowseClicked);
+    connect(exportButton_,    &QPushButton::clicked, this, &RecordingPanel::onExportClicked);
     connect(readoutTimer_,    &QTimer::timeout,      this, &RecordingPanel::updateReadout);
     connect(controller_,      &SessionController::recordingChanged,
             this,             &RecordingPanel::onRecordingChanged);
@@ -135,6 +152,12 @@ void RecordingPanel::wireSignals()
     connect(controller_, &SessionController::configChanged,
             this, [this](const studio::DeviceConfig& cfg) {
         sampleRateLabel_->setText(QString("%1 Hz").arg(cfg.sampleRate()));
+    });
+    // Cache latest lead-off bits for the pre-recording quality gate.
+    connect(controller_, &SessionController::metricsUpdated,
+            this, [this](const studio::Metrics& m) {
+        lastLeadOffP_ = m.leadOffP;
+        lastLeadOffN_ = m.leadOffN;
     });
 }
 
@@ -183,12 +206,22 @@ void RecordingPanel::onRecordClicked()
         .withSampleRate(sr)
         .withStartTimeUtc(QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
 
+    // ── Signal-quality gate ──────────────────────────────────────────────────
+    // Show the per-channel lead-off dialog unless the operator opted out.
+    // The headless path (controller_->startRecording called directly in tests)
+    // bypasses this gate entirely — it lives only in the UI flow.
+    if (!skipQualityCheckBox_->isChecked()) {
+        PreRecordCheckDialog dlg(lastLeadOffP_, lastLeadOffN_, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+    }
+
     if (!controller_->startRecording(basePath, meta)) {
         QMessageBox::critical(this, "Recording Error",
                               "Failed to start recording. Streaming must be active "
                               "and the output folder writable.");
         return;
     }
+    lastBasePath_ = basePath;
     recordElapsed_.restart();
     // Button states are updated by onRecordingChanged via the controller signal.
 }
@@ -233,6 +266,9 @@ void RecordingPanel::setRecordingMode(bool recording)
     folderEdit_->setEnabled(!recording);
     browseButton_->setEnabled(!recording);
 
+    // Export is available only when there is a completed session and we are not recording.
+    exportButton_->setEnabled(!recording && !lastBasePath_.isEmpty());
+
     if (recording) {
         recordElapsed_.restart();
         readoutTimer_->start();
@@ -255,6 +291,29 @@ void RecordingPanel::updateReadout()
             .arg(minutes, 2, 10, QChar('0'))
             .arg(seconds, 2, 10, QChar('0'))
             .arg(samples));
+}
+
+void RecordingPanel::onExportClicked()
+{
+    if (lastBasePath_.isEmpty()) return;
+
+    const QString dest = QFileDialog::getExistingDirectory(
+        this, "Export session to folder…");
+    if (dest.isEmpty()) return;
+
+    QStringList copied;
+    QString error;
+    const bool ok = SessionExporter::exportTo(lastBasePath_, dest, copied, error);
+
+    if (ok) {
+        QMessageBox::information(
+            this, "Export Complete",
+            QString("Exported %1 file(s) to %2.").arg(copied.size()).arg(dest));
+    } else {
+        QMessageBox::warning(
+            this, "Export Failed",
+            error);
+    }
 }
 
 // ─── Toolbar entry points ────────────────────────────────────────────────────

@@ -7,7 +7,9 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPair>
 #include <QPushButton>
+#include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
@@ -50,6 +52,7 @@ MonitorView::MonitorView(SessionController* controller, QWidget* parent)
 
         // Refresh gains and sample rate whenever the device config changes.
         // Also clear rolling buffers so a rate switch rescales cleanly.
+        // Rebuild the display filter chain so its internal fs matches the new rate.
         connect(controller_, &SessionController::configChanged,
                 this, [this](const studio::DeviceConfig& cfg) {
             const auto arr = cfg.gain();
@@ -57,6 +60,7 @@ MonitorView::MonitorView(SessionController* controller, QWidget* parent)
                 gains_[c] = arr[static_cast<size_t>(c)];
             }
             setSampleRate(cfg.sampleRate());
+            rebuildFilterChain();
             clear();
         });
     }
@@ -65,6 +69,9 @@ MonitorView::MonitorView(SessionController* controller, QWidget* parent)
     connect(&renderTimer_, &QTimer::timeout, this, &MonitorView::onRenderTick);
     renderTimer_.setInterval(kRenderIntervalMs);
     renderTimer_.start();
+
+    // Build initial display filter chain (Off/Off by default — passthrough).
+    rebuildFilterChain();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -79,6 +86,9 @@ void MonitorView::clear()
     timeSamples_.clear();
     currentTimeSec_ = 0.0;
 
+    // Clear display filter state so stale transients don't bleed across stream resets.
+    filterChain_.reset();
+
     for (int c = 0; c < kNumChannels; ++c) {
         graphs_[c]->data()->clear();
     }
@@ -90,6 +100,12 @@ void MonitorView::setSampleRate(int hz)
     if (hz > 0) {
         sampleRateHz_ = hz;
     }
+}
+
+void MonitorView::togglePause()
+{
+    // Flip the paused_ state via the button so its visual check state stays in sync.
+    pauseButton_->setChecked(!paused_);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -116,7 +132,10 @@ void MonitorView::onRenderTick()
             // FIX 3: use per-channel configured gain so µV scale is correct.
             ScaleConverter converter(gains_[c]);
             const double uv = converter.countsToMicrovolts(frame.ch[c]);
-            channelSamples_[c].append(uv + offsetUv(c));
+            // Apply display-only filter chain (notch/bandpass if configured).
+            // The raw frame is NOT modified — recording path is entirely unaffected.
+            const double displayUv = filterChain_.process(c, uv);
+            channelSamples_[c].append(displayUv + offsetUv(c));
         }
     }
 
@@ -215,7 +234,41 @@ void MonitorView::buildLayout()
         applyYScale();
     });
 
+    // ---- Filter controls -----------------------------------------------
+    auto* notchLabel = new QLabel("Notch:", controlBar);
+    notchLabel->setStyleSheet(QString("color: %1;").arg(theme::kTextMuted));
+
+    notchCombo_ = new QComboBox(controlBar);
+    notchCombo_->addItem("Off",   0.0);
+    notchCombo_->addItem("50 Hz", 50.0);
+    notchCombo_->addItem("60 Hz", 60.0);
+    connect(notchCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MonitorView::onFilterChanged);
+
+    auto* bpLabel = new QLabel("Band-pass:", controlBar);
+    bpLabel->setStyleSheet(QString("color: %1;").arg(theme::kTextMuted));
+
+    bpCombo_ = new QComboBox(controlBar);
+    bpCombo_->addItem("Off",           QVariant::fromValue(QPair<double,double>(0.0, 0.0)));
+    bpCombo_->addItem("0.5–40 Hz",     QVariant::fromValue(QPair<double,double>(0.5, 40.0)));
+    bpCombo_->addItem("1–100 Hz",      QVariant::fromValue(QPair<double,double>(1.0, 100.0)));
+    bpCombo_->addItem("8–13 Hz (α)",   QVariant::fromValue(QPair<double,double>(8.0, 13.0)));
+    bpCombo_->addItem("13–30 Hz (β)",  QVariant::fromValue(QPair<double,double>(13.0, 30.0)));
+    connect(bpCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MonitorView::onFilterChanged);
+
+    filterHint_ = new QLabel("Filters affect display only — recording stays raw.", controlBar);
+    filterHint_->setStyleSheet(QString("color: %1; font-style: italic; font-size: 10px;")
+                               .arg(theme::kTextMuted));
+
     controlLayout->addWidget(pauseButton_);
+    controlLayout->addStretch();
+    controlLayout->addWidget(notchLabel);
+    controlLayout->addWidget(notchCombo_);
+    controlLayout->addWidget(bpLabel);
+    controlLayout->addWidget(bpCombo_);
+    controlLayout->addSpacing(12);
+    controlLayout->addWidget(filterHint_);
     controlLayout->addStretch();
     controlLayout->addWidget(uvLabel);
     controlLayout->addWidget(uvDivCombo_);
@@ -306,6 +359,41 @@ void MonitorView::applyYScale()
     if (plot_->isVisible()) {
         plot_->replot(QCustomPlot::rpQueuedReplot);
     }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Display filter chain
+// ──────────────────────────────────────────────────────────────────────────────
+
+void MonitorView::onFilterChanged()
+{
+    rebuildFilterChain();
+    filterChain_.reset();
+}
+
+void MonitorView::rebuildFilterChain()
+{
+    // Notch
+    double notchHz = 0.0;
+    if (notchCombo_) {
+        notchHz = notchCombo_->currentData().toDouble();
+    }
+
+    // Bandpass
+    double bpLo = 0.0;
+    double bpHi = 0.0;
+    if (bpCombo_) {
+        const QVariant v = bpCombo_->currentData();
+        if (v.isValid()) {
+            const auto pair = v.value<QPair<double,double>>();
+            bpLo = pair.first;
+            bpHi = pair.second;
+        }
+    }
+
+    filterChain_.configure(kNumChannels,
+                           static_cast<double>(sampleRateHz_),
+                           notchHz, bpLo, bpHi);
 }
 
 } // namespace studio

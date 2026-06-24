@@ -7,7 +7,9 @@
 
 #include <QWidget>
 #include <QElapsedTimer>
+#include <cstdint>
 
+class QCheckBox;
 class QLineEdit;
 class QPlainTextEdit;
 class QLabel;
@@ -36,6 +38,7 @@ private slots:
     void onStopClicked();
     void onAddMarkerClicked();
     void onBrowseClicked();
+    void onExportClicked();
     void onRecordingChanged(bool recording);
     void updateReadout();
 
@@ -59,12 +62,21 @@ private:
     QPushButton*    stopButton_      = nullptr;
     QPushButton*    addMarkerButton_ = nullptr;
     QLineEdit*      markerLabelEdit_ = nullptr;
+    QPushButton*    exportButton_    = nullptr;
+
+    // Tracks the base path of the most recently started recording (persists after stop).
+    QString         lastBasePath_;
 
     // Live readout
     QLabel*         readoutLabel_    = nullptr;
     QLabel*         sampleRateLabel_ = nullptr;  // FIX 4: shows actual config sample rate
     QTimer*         readoutTimer_    = nullptr;
     QElapsedTimer   recordElapsed_;   // restarted on record; drives mm:ss readout
+
+    // Signal-quality gate
+    QCheckBox*      skipQualityCheckBox_ = nullptr;
+    uint8_t         lastLeadOffP_        = 0;
+    uint8_t         lastLeadOffN_        = 0;
 };
 
 } // namespace studio

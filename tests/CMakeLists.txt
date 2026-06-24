@@ -173,3 +173,46 @@ set_target_properties(test_configfreeze PROPERTIES AUTOMOC ON)
 target_link_libraries(test_configfreeze PRIVATE studio_core Qt6::Test)
 add_test(NAME test_configfreeze COMMAND test_configfreeze)
 set_tests_properties(test_configfreeze PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_displayfilter test_displayfilter.cpp)
+set_target_properties(test_displayfilter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_displayfilter PRIVATE studio_core Qt6::Test)
+add_test(NAME test_displayfilter COMMAND test_displayfilter)
+
+add_executable(test_alertbar
+    test_alertbar.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/AlertBar.cpp)
+set_target_properties(test_alertbar PROPERTIES AUTOMOC ON)
+target_include_directories(test_alertbar PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_alertbar PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_alertbar COMMAND test_alertbar)
+set_tests_properties(test_alertbar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_prerecordcheck
+    test_prerecordcheck.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/PreRecordCheckDialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/theme/LedIndicator.cpp)
+set_target_properties(test_prerecordcheck PROPERTIES AUTOMOC ON)
+target_include_directories(test_prerecordcheck PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_prerecordcheck PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_prerecordcheck COMMAND test_prerecordcheck)
+set_tests_properties(test_prerecordcheck PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_shortcuts
+    test_shortcuts.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/ShortcutsHelpDialog.cpp)
+set_target_properties(test_shortcuts PROPERTIES AUTOMOC ON)
+target_include_directories(test_shortcuts PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_shortcuts PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_shortcuts COMMAND test_shortcuts)
+set_tests_properties(test_shortcuts PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_sessionexporter test_sessionexporter.cpp)
+set_target_properties(test_sessionexporter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessionexporter PRIVATE studio_core Qt6::Test)
+add_test(NAME sessionexporter COMMAND test_sessionexporter)
+
+add_executable(test_sessionscanner test_sessionscanner.cpp)
+set_target_properties(test_sessionscanner PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessionscanner PRIVATE studio_core Qt6::Test)
+add_test(NAME test_sessionscanner COMMAND test_sessionscanner)
