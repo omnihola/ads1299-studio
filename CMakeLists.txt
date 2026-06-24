@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets SerialPort PrintSupport Test)
+find_package(Qt6 REQUIRED COMPONENTS Widgets SerialPort PrintSupport Test OpenGLWidgets OpenGL)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
@@ -48,7 +48,7 @@ target_link_directories(studio_core PUBLIC ${LIBUSB_LIBRARY_DIRS})
 # UI sources
 file(GLOB_RECURSE UI_SOURCES CONFIGURE_DEPENDS src/ui/*.cpp)
 qt_add_executable(ads1299-studio src/main.cpp ${UI_SOURCES} resources/resources.qrc)
-target_link_libraries(ads1299-studio PRIVATE studio_core qcustomplot Qt6::Widgets)
+target_link_libraries(ads1299-studio PRIVATE studio_core qcustomplot Qt6::Widgets Qt6::OpenGLWidgets Qt6::OpenGL)
 
 enable_testing()
 add_subdirectory(tests)

@@ -63,13 +63,12 @@ SessionController::~SessionController()
         workerThread_.wait();
     }
 
-    // FIX 2: Free source_ now that workerThread_ is stopped. Move it back to
-    // the current thread (required for a direct delete) then delete directly —
-    // NOT deleteLater, as the event loop may not be running during shutdown.
-    // source_ has no QObject parent (ctor calls setParent(nullptr)) so there
-    // is no risk of a double-delete.
+    // Free source_ now that workerThread_ is fully stopped (quit()+wait()
+    // completed above). A QObject whose owning thread has been joined and has
+    // no pending events is safe to delete directly from any thread — Qt only
+    // warns on moveToThread / cross-thread event delivery, not on plain delete.
+    // We deliberately skip moveToThread to avoid triggering that very warning.
     if (source_) {
-        source_->moveToThread(QThread::currentThread());
         delete source_;
         source_ = nullptr;
     }
@@ -224,11 +223,12 @@ void SessionController::setSource(IDataSource* newSource)
                this,      &SessionController::onSourceError);
 
     // 3. Destroy the old source safely.
-    //    workerThread_ is NOT running at this point (stopStreaming() quit it).
-    //    Move the old source back to this object's thread so deleteLater()
-    //    runs on the controller thread's event loop (safe, no race).
-    oldSource->moveToThread(this->thread());
-    oldSource->deleteLater();
+    //    workerThread_ is NOT running at this point (stopStreaming() above
+    //    called quit()+wait(), so the thread is fully joined and has no pending
+    //    events). A direct delete is safe and avoids a moveToThread call on an
+    //    object whose affinity points to a dead thread — which would otherwise
+    //    print a Qt "Cannot move to target thread" warning.
+    delete oldSource;
 
     // 4. Wire the new source onto the worker thread.
     newSource->setParent(nullptr);

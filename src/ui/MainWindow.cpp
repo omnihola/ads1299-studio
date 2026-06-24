@@ -285,7 +285,7 @@ void MainWindow::buildStatusBar()
     sb->addWidget(linkWidget);
 
     // Monospace metric labels
-    const QString monoStyle = "font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px;";
+    const QString monoStyle = "font-family: Menlo, monospace; font-size: 11px;";
 
     spsLabel_ = new QLabel("SPS: --", this);
     spsLabel_->setObjectName("spsLabel");
@@ -352,9 +352,9 @@ void MainWindow::onMetricsUpdated(studio::Metrics m)
     bufferLabel_->setText(QString("Buffer: %1%").arg(pct));
 
     if (m.droppedSamples > 0) {
-        droppedLabel_->setStyleSheet("color:#f85149; font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px;");
+        droppedLabel_->setStyleSheet("color:#f85149; font-family: Menlo, monospace; font-size: 11px;");
     } else {
-        droppedLabel_->setStyleSheet("font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px;");
+        droppedLabel_->setStyleSheet("font-family: Menlo, monospace; font-size: 11px;");
     }
 }
 

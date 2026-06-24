@@ -52,7 +52,7 @@ QString formatDuration(double secs)
 QTableWidgetItem* monoItem(const QString& text)
 {
     auto* item = new QTableWidgetItem(text);
-    item->setFont(QFont("SF Mono", 11));
+    item->setFont(QFont("Menlo", 11));
     item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     return item;
 }
