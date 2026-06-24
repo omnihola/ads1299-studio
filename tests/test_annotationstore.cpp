@@ -90,6 +90,24 @@ private slots:
         QCOMPARE(store.count(), 0);
         QCOMPARE(store.all().size(), 0);
     }
+
+    // all() must be a STABLE sort: markers added at the same onset keep their
+    // insertion order. A regression to std::sort would reorder same-time events,
+    // silently corrupting event timing in a recording.
+    void stable_order_for_equal_onsets() {
+        AnnotationStore store;
+        store.add(2.0, "first");
+        store.add(2.0, "second");
+        store.add(2.0, "third");
+        store.add(1.0, "earlier");
+
+        const auto a = store.all();
+        QCOMPARE(a.size(), 4);
+        QCOMPARE(a[0].label, QString("earlier"));   // 1.0 sorts ahead
+        QCOMPARE(a[1].label, QString("first"));      // equal onset → insertion order
+        QCOMPARE(a[2].label, QString("second"));
+        QCOMPARE(a[3].label, QString("third"));
+    }
 };
 
 QTEST_MAIN(TestAnnotationStore)
