@@ -41,6 +41,8 @@ On macOS this needs **no driver install** — `libusb‑1.0` claims the interfac
 
 A layered C++17 design with a strict **acquisition boundary** (`IDataSource`) so data sources are interchangeable without touching the UI or recording.
 
+> **Extending the project?** See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the `IDataSource` extension point, threading model, and the invariants you must not break.
+
 ```
 ┌─ UI (src/ui) ────────────────────────────────────────────────┐
 │ MainWindow · MonitorView→GlWaveformWidget(OpenGL) · Spectrum  │
