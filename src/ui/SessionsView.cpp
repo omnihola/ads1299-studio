@@ -33,7 +33,8 @@ constexpr int kColDuration = 2;
 constexpr int kColRate     = 3;
 constexpr int kColSamples  = 4;
 constexpr int kColBdf      = 5;
-constexpr int kNumCols     = 6;
+constexpr int kColCsv      = 6;
+constexpr int kNumCols     = 7;
 
 // Role for storing the basePath of each row
 constexpr int kBasePathRole = Qt::UserRole + 1;
@@ -122,7 +123,7 @@ void SessionsView::buildUi(const QString& defaultDir)
     // ── Table ─────────────────────────────────────────────────────────────────
     table_ = new QTableWidget(0, kNumCols, this);
     table_->setHorizontalHeaderLabels(
-        {"Subject", "Date (UTC)", "Duration", "Rate (Hz)", "Samples", "BDF"});
+        {"Subject", "Date (UTC)", "Duration", "Rate (Hz)", "Samples", "BDF", "CSV"});
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(kColSubject, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(kColDate,     QHeaderView::ResizeToContents);
@@ -130,6 +131,7 @@ void SessionsView::buildUi(const QString& defaultDir)
     table_->horizontalHeader()->setSectionResizeMode(kColRate,     QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(kColSamples,  QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(kColBdf,      QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(kColCsv,      QHeaderView::ResizeToContents);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -187,6 +189,7 @@ void SessionsView::populateTable()
         table_->setItem(row, kColRate,     monoItem(QString::number(s.sampleRate)));
         table_->setItem(row, kColSamples,  monoItem(QString::number(s.totalSamples)));
         table_->setItem(row, kColBdf,      textItem(s.hasBdf ? "✓" : "–"));
+        table_->setItem(row, kColCsv,      textItem(s.hasCsv ? "✓" : "–"));
     }
 
     revealBtn_->setEnabled(false);
