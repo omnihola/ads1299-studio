@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QStyleFactory>
 #include <QFile>
 #include <QPixmap>
 #include <QSurfaceFormat>
@@ -20,6 +21,12 @@ int main(int argc, char** argv) {
     }
 
     QApplication app(argc, argv);
+
+    // Use the Fusion style so the custom dark stylesheet is honored fully and
+    // consistently on every platform. The native macOS style draws some widgets
+    // (notably the QTabWidget tab bar) with system chrome that overrides QSS
+    // backgrounds, producing a light tab strip; Fusion respects the QSS everywhere.
+    app.setStyle(QStyleFactory::create("Fusion"));
 
     // Apply dark studio theme
     QFile qss(":/studio.qss");
