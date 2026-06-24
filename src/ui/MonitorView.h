@@ -16,6 +16,7 @@
 #include "core/dsp/DisplayFilterChain.h"
 
 // Forward declarations
+class QCheckBox;
 class QPushButton;
 class QComboBox;
 class QLabel;
@@ -67,6 +68,7 @@ private:
 
     // ---- Controls -----------------------------------------------------------
     QPushButton* pauseButton_  = nullptr;
+    QCheckBox*   autoScaleBox_ = nullptr;  // Auto per-channel scale toggle
     QComboBox*   uvDivCombo_   = nullptr;
     QComboBox*   notchCombo_   = nullptr;  // Off / 50 Hz / 60 Hz
     QComboBox*   bpCombo_      = nullptr;  // Off / bandpass presets

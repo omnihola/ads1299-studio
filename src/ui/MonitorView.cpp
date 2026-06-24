@@ -4,6 +4,7 @@
 
 #include "ui/MonitorView.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -174,6 +175,26 @@ void MonitorView::buildLayout()
         }
     });
 
+    autoScaleBox_ = new QCheckBox("Auto", controlBar);
+    autoScaleBox_->setChecked(false);
+    autoScaleBox_->setToolTip(
+        "Auto-scale each channel to fit (per-channel; amplitudes not comparable across channels while on)");
+    connect(autoScaleBox_, &QCheckBox::toggled, this, [this](bool checked) {
+        if (glPlot_) {
+            glPlot_->setAutoScale(checked);
+        }
+        // Disable µV/div combo while auto is active (it has no effect then).
+        if (uvDivCombo_) {
+            uvDivCombo_->setEnabled(!checked);
+        }
+        // When turning auto OFF, re-apply the current combo selection so the
+        // widget immediately reflects the manual scale.
+        if (!checked && glPlot_ && uvDivCombo_) {
+            uvPerDiv_ = uvDivCombo_->currentData().toDouble();
+            glPlot_->setMicrovoltsPerDiv(uvPerDiv_);
+        }
+    });
+
     // ---- Filter controls -----------------------------------------------
     auto* notchLabel = new QLabel("Notch:", controlBar);
     notchLabel->setStyleSheet(QString("color: %1;").arg(theme::kTextMuted));
@@ -212,6 +233,7 @@ void MonitorView::buildLayout()
     controlLayout->addStretch();
     controlLayout->addWidget(uvLabel);
     controlLayout->addWidget(uvDivCombo_);
+    controlLayout->addWidget(autoScaleBox_);
 
     // ---- GL waveform plot ----------------------------------------------
     glPlot_ = new studio::gl::GlWaveformWidget(this);

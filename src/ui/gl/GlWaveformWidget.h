@@ -38,6 +38,7 @@ public:
     void setSampleRate(double sps);
     void setWindowSeconds(double s);        // visible scroll window (default 5 s)
     void setMicrovoltsPerDiv(double uv);    // vertical scale (default 200 µV/div)
+    void setAutoScale(bool on);             // per-channel auto-scale (fast-attack/slow-release)
 
     // ---- Data feed -----------------------------------------------------------
     // Append a block of samples.  perChannelSamples[c] contains the new µV values
@@ -64,10 +65,14 @@ private:
     // State
     bool   glOk_        = false;
     bool   paused_      = false;
+    bool   autoScale_   = false;
     int    channelCount_= 8;
     double sampleRate_  = 250.0;
     double windowSec_   = 5.0;
     double uvPerDiv_    = 200.0;
+
+    // Per-channel auto-scale envelope (µV at the lane edge)
+    std::vector<double> autoScaleUv_;   // size == channelCount_
 
     static constexpr double kDivsPerHalfLane = 1.5;
     static constexpr int    kMaxCapacity     = 200000; // per channel
@@ -81,7 +86,7 @@ private:
     // Helpers
     void ensureBuffers();
     int  windowCapacity() const;            // sampleRate_ * windowSec_, capped
-    void buildNdcPoints(int channel, std::vector<float>& out, int maxPoints) const;
+    void buildNdcPoints(int channel, std::vector<float>& out, int maxPoints);
     void drawOverlay(int widgetWidth, int widgetHeight);
 };
 

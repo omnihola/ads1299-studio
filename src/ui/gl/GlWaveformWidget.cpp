@@ -4,6 +4,7 @@
 
 #include "ui/gl/GlWaveformWidget.h"
 #include "ui/gl/WaveformTransform.h"
+#include "ui/gl/AutoScale.h"
 #include "ui/theme/Theme.h"
 #include "core/dsp/Decimate.h"
 
@@ -116,6 +117,12 @@ void GlWaveformWidget::setMicrovoltsPerDiv(double uv)
     update();
 }
 
+void GlWaveformWidget::setAutoScale(bool on)
+{
+    autoScale_ = on;
+    update();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Data feed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +150,8 @@ void GlWaveformWidget::clearData()
     for (auto& buf : channelBufs_) {
         buf.clear();
     }
+    // Reset per-channel auto-scale envelopes to the current global µV/div.
+    std::fill(autoScaleUv_.begin(), autoScaleUv_.end(), uvPerDiv_);
     update();
 }
 
@@ -287,7 +296,14 @@ void GlWaveformWidget::paintGL()
 
 void GlWaveformWidget::ensureBuffers()
 {
-    channelBufs_.resize(static_cast<size_t>(channelCount_));
+    const size_t n = static_cast<size_t>(channelCount_);
+    channelBufs_.resize(n);
+
+    // Grow autoScaleUv_ if more channels were added; initialise new entries to
+    // the current global µV/div so the first auto-scale frame starts sensibly.
+    if (autoScaleUv_.size() < n) {
+        autoScaleUv_.resize(n, uvPerDiv_);
+    }
 }
 
 int GlWaveformWidget::windowCapacity() const
@@ -298,7 +314,7 @@ int GlWaveformWidget::windowCapacity() const
 
 void GlWaveformWidget::buildNdcPoints(int channel,
                                       std::vector<float>& out,
-                                      int maxPoints) const
+                                      int maxPoints)
 {
     if (channel < 0 || channel >= static_cast<int>(channelBufs_.size())) {
         return;
@@ -330,6 +346,33 @@ void GlWaveformWidget::buildNdcPoints(int channel,
         return;
     }
 
+    // --- Auto-scale: update per-channel envelope from decimated peak ---------
+    // We use the decimated set (~2×width points) which is exactly what is
+    // visible — cheap and bounded.  Only update when not paused.
+    double effectiveUvPerDiv = uvPerDiv_;
+    if (autoScale_) {
+        if (!paused_) {
+            double peak = 0.0;
+            for (int k = 0; k < kept; ++k) {
+                const double absVal = std::abs(ds.values[k]);
+                if (absVal > peak) {
+                    peak = absVal;
+                }
+            }
+            autoScaleUv_[static_cast<size_t>(channel)] =
+                autoScaleStep(autoScaleUv_[static_cast<size_t>(channel)],
+                              peak,
+                              /*floorUv=*/2.0,
+                              /*fillFraction=*/0.85,
+                              /*attack=*/0.5,
+                              /*release=*/0.05);
+        }
+        // Per-channel effective µV/div: autoScaleUv_ is the half-lane edge in µV.
+        // microvoltsToNdcY uses uvPerDiv * divsPerHalfLane = fullScaleUv, so:
+        //   effectiveUvPerDiv = autoScaleUv_[c] / divsPerHalfLane
+        effectiveUvPerDiv = autoScaleUv_[static_cast<size_t>(channel)] / kDivsPerHalfLane;
+    }
+
     out.reserve(static_cast<size_t>(kept) * 2);
 
     // --- Right-aligned X mapping ----------------------------------------------
@@ -347,7 +390,7 @@ void GlWaveformWidget::buildNdcPoints(int channel,
         const float y = microvoltsToNdcY(ds.values[k],
                                          channel,
                                          channelCount_,
-                                         uvPerDiv_,
+                                         effectiveUvPerDiv,
                                          kDivsPerHalfLane);
         out.push_back(x);
         out.push_back(y);
@@ -372,7 +415,7 @@ void GlWaveformWidget::drawOverlay(int widgetWidth, int widgetHeight)
         p.drawLine(0, py, widgetWidth, py);
     }
 
-    // Channel labels
+    // Channel labels (and optional per-lane scale when auto is on)
     const QColor labelColor(theme::kTextMuted);
     p.setPen(labelColor);
     const QFont  labelFont("monospace", 9);
@@ -382,15 +425,26 @@ void GlWaveformWidget::drawOverlay(int widgetWidth, int widgetHeight)
         const float ndcY  = channelCenterNdcY(c, channelCount_);
         const int   py    = static_cast<int>((1.0f - ndcY) * 0.5f * static_cast<float>(widgetHeight));
         p.drawText(4, py + 5, QString("CH%1").arg(c + 1));
+
+        // When auto-scale is active, show a small ±<scale> µV readout per lane.
+        if (autoScale_ && static_cast<size_t>(c) < autoScaleUv_.size()) {
+            const double scaleUv = autoScaleUv_[static_cast<size_t>(c)];
+            const QString scaleText = QString("±%1µV").arg(static_cast<int>(scaleUv + 0.5));
+            p.drawText(widgetWidth - 72, py + 5, scaleText);
+        }
     }
 
     // Time axis label
     p.drawText(widgetWidth / 2 - 20, widgetHeight - 4,
                QString("%1 s").arg(static_cast<int>(windowSec_)));
 
-    // µV/div annotation
-    p.drawText(widgetWidth - 80, 14,
-               QString("%1 µV/div").arg(static_cast<int>(uvPerDiv_)));
+    // µV/div annotation (shows "Auto" when auto-scale is on)
+    if (autoScale_) {
+        p.drawText(widgetWidth - 80, 14, "Auto µV");
+    } else {
+        p.drawText(widgetWidth - 80, 14,
+                   QString("%1 µV/div").arg(static_cast<int>(uvPerDiv_)));
+    }
 
     p.end();
 }
