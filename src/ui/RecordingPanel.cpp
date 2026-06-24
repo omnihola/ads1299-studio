@@ -291,8 +291,9 @@ void RecordingPanel::onRecordClicked()
         return;
     }
     lastBasePath_ = basePath;
-    recordElapsed_.restart();
-    // Button states are updated by onRecordingChanged via the controller signal.
+    // Button states AND the elapsed-time clock are set by setRecordingMode(), invoked
+    // via the controller's recordingChanged signal — so we don't restart the clock here
+    // (the toolbar Record path relies on that same handler too).
 }
 
 void RecordingPanel::onStopClicked()
