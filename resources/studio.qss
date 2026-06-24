@@ -12,7 +12,9 @@
 QWidget {
     background-color: #0e1116;
     color: #e6edf3;
-    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    /* font-family omitted: Qt uses the native platform font (SF Pro on macOS).
+       "-apple-system" is a CSS browser keyword Qt does not recognise and would
+       print a qt.qpa.fonts warning at startup. */
     font-size: 13px;
     selection-background-color: #3fb6ff;
     selection-color: #08121a;

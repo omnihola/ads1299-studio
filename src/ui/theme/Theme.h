@@ -21,7 +21,10 @@ inline constexpr const char* kErrorBg     = "#2d0b0b";   // very dark red tint
 
 // ── Font families ─────────────────────────────────────────────────────────────
 inline constexpr const char* kMonoFamily  = "\"SF Mono\", \"JetBrains Mono\", Menlo, monospace";
-inline constexpr const char* kUiFamily    = "-apple-system, \"Segoe UI\", Inter, sans-serif";
+// kUiFamily intentionally omits "-apple-system" (a browser CSS keyword Qt
+// does not recognise — it would print a qt.qpa.fonts warning). On macOS Qt
+// uses the native platform font (SF Pro) automatically; on Windows "Segoe UI".
+inline constexpr const char* kUiFamily    = "\"Segoe UI\", Inter, sans-serif";
 
 // ── Spacing & geometry ────────────────────────────────────────────────────────
 inline constexpr int kRadius = 6;
