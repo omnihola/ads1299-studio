@@ -1,11 +1,15 @@
 #pragma once
 
+#include <array>
+
+#include <QDateTime>
 #include <QFile>
 #include <QObject>
 #include <QString>
 #include <QTextStream>
 
 #include "core/acquisition/EegFrame.h"
+#include "core/dsp/ScaleConverter.h"
 #include "core/recording/SessionMetadata.h"
 #include "core/recording/AnnotationStore.h"
 
@@ -34,9 +38,11 @@ namespace studio {
  *
  * CSV details
  * ===========
- * Header: seq,t_seconds,ch0_uV,ch1_uV,...,ch7_uV
- * One row per EegFrame. t_seconds = frameIndex / sampleRate. Values in µV via
- * ScaleConverter.
+ * Header: timestamp_utc,seq,t_seconds,statP,statN,gpio,
+ *         ch0_raw..ch7_raw,ch0_uV..ch7_uV,flag
+ * One row per EegFrame (real) or per gap sample (pad row, flag=="drop_pad").
+ * t_seconds = timelineIndex / sampleRate (covers both real and pad rows).
+ * Values in µV via ScaleConverter.
  *
  * meta.json
  * =========
@@ -113,6 +119,15 @@ private:
     int      edfHandle_  = -1;
     quint64  samplesWritten_  = 0;
     quint64  paddedSamples_   = 0; // zero-fill samples written for gap preservation
+
+    // CSV timeline: counts every row written (real + pad)
+    quint64  timelineIndex_   = 0;
+
+    // Absolute UTC start of recording (set on open)
+    QDateTime recordingStart_;
+
+    // Per-channel scale converters (initialised on open using gain settings)
+    std::array<ScaleConverter, 8> converters_;
 
     // Session info
     SessionMetadata meta_;
