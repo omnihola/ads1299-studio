@@ -106,9 +106,19 @@ void MainWindow::buildToolbar()
 
     // Connect action: list available serial ports and swap the active source.
     connect(connectAction_, &QAction::triggered, this, [this]() {
+        // Prefer MMB0 USB device (ADS1299 via libusb, VID=0x0451 PID=0x5718).
+        if (controller_->connectMmb0()) {
+            linkLed_->setStatus(LedIndicator::Status::Ok);
+            statusBar()->showMessage("Connected: ADS1299 (MMB0)", 4000);
+            return;
+        }
+
+        // Fall back to serial port selection.
         const QStringList ports = SerialSource::availablePorts();
         if (ports.isEmpty()) {
-            statusBar()->showMessage("No serial ports found", 4000);
+            linkLed_->setStatus(LedIndicator::Status::Warn);
+            statusBar()->showMessage(
+                "No MMB0 (0451:5718) or serial device found", 5000);
             return;
         }
         bool ok = false;

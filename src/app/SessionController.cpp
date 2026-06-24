@@ -1,6 +1,8 @@
 // src/app/SessionController.cpp
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
+#include "core/acquisition/mmb0/Mmb0DataSource.h"
+#include "core/acquisition/mmb0/Mmb0UsbTransport.h"
 #include "core/logging/Logger.h"
 
 #include <QJsonObject>
@@ -232,6 +234,29 @@ bool SessionController::connectSerial(const QString& portName, int baud)
     setSource(serial);
     Logger::instance().log("info", "SessionController.connectSerial",
                            QJsonObject{{"port", portName}, {"baud", baud}});
+    return true;
+}
+
+bool SessionController::connectMmb0()
+{
+    if (!studio::mmb0::Mmb0UsbTransport::isDevicePresent()) {
+        Logger::instance().log("info", "SessionController.connectMmb0.noDevice",
+                               QJsonObject{{"vid", "0x0451"}, {"pid", "0x5718"}});
+        return false;
+    }
+
+    auto* t = new studio::mmb0::Mmb0UsbTransport();
+    if (!t->open()) {
+        Logger::instance().log("warn", "SessionController.connectMmb0.openFailed",
+                               QJsonObject{{"error", t->lastError()}});
+        delete t;
+        return false;
+    }
+
+    auto* src = new studio::mmb0::Mmb0DataSource(t); // src takes ownership of t
+    src->setConfig(config_);
+    setSource(src);
+    Logger::instance().log("info", "SessionController.connectMmb0.connected", {});
     return true;
 }
 
