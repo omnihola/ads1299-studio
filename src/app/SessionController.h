@@ -90,6 +90,12 @@ public:
     // returns false. Logs the outcome.
     bool connectSerial(const QString& portName, int baud = 921600);
 
+    // Convenience: detect and open the first MMB0 USB device (VID=0x0451,
+    // PID=0x5718). Creates an Mmb0UsbTransport + Mmb0DataSource and calls
+    // setSource(). Returns true on success. If no device is present or open
+    // fails, returns false without touching the current source.
+    bool connectMmb0();
+
 public slots:
     void startStreaming();
     void stopStreaming();

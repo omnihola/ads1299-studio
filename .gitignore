@@ -19,3 +19,7 @@
 
 # SDD scratch
 /.superpowers/
+
+# RE reference (TI source kept locally for interop; review licensing before publishing)
+/reference/ti-mmb0/cstyx/estyx/
+/reference/ti-mmb0/docs/ads1299evm-pdk.bin
