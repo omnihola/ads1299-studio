@@ -24,6 +24,7 @@
 #include <QSignalBlocker>
 #include <QSettings>
 #include <QCloseEvent>
+#include <QMessageBox>
 #include "app/SettingsKeys.h"
 
 #include "app/SessionController.h"
@@ -115,6 +116,23 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    // If a recording is in progress, confirm before closing. The recording is
+    // finalized cleanly on shutdown either way (SessionController dtor closes the
+    // recorder), but make it explicit so an accidental close doesn't silently end
+    // an in-progress session.
+    if (controller_ && controller_->state() == studio::State::Recording) {
+        const auto ret = QMessageBox::question(
+            this, "Recording in progress",
+            "A recording is in progress. Stop it and close?\n"
+            "(The recording will be saved.)",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ret != QMessageBox::Yes) {
+            event->ignore();
+            return;
+        }
+        controller_->stopRecording();  // finalize the BDF before we tear down
+    }
+
     // Persist window size/position so the app reopens where the user left it.
     QSettings().setValue(settings::kWindowGeometry, saveGeometry());
     QMainWindow::closeEvent(event);
