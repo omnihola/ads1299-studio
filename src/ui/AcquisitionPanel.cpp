@@ -59,6 +59,10 @@ AcquisitionPanel::AcquisitionPanel(SessionController* controller, QWidget* paren
     // React to changes made elsewhere (e.g., Registers tab)
     connect(controller_, &SessionController::configChanged,
             this, &AcquisitionPanel::onConfigChanged);
+
+    // Disable controls while recording to prevent mid-recording config changes.
+    connect(controller_, &SessionController::recordingChanged,
+            this, &AcquisitionPanel::onRecordingChanged);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -90,7 +94,8 @@ void AcquisitionPanel::buildUi()
     outerLayout->setSpacing(12);
 
     // ── Controls group ───────────────────────────────────────────────────────
-    auto* controlsBox = new QGroupBox("Controls", this);
+    controlsBox_ = new QGroupBox("Controls", this);
+    auto* controlsBox = controlsBox_;
     controlsBox->setStyleSheet(QString(
         "QGroupBox { color: %1; border: 1px solid %2; border-radius: 4px;"
         "  margin-top: 6px; font-size: 11px; font-weight: bold; }"
@@ -230,6 +235,23 @@ void AcquisitionPanel::onConfigChanged(studio::DeviceConfig cfg)
 void AcquisitionPanel::setSampleRateSelection(int sps)
 {
     spsCombo_->setCurrentText(QString("%1 Hz").arg(sps));
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Recording-state lock
+// ──────────────────────────────────────────────────────────────────────────────
+
+void AcquisitionPanel::onRecordingChanged(bool recording)
+{
+    // Disable the Controls group while recording so sample-rate and gain
+    // cannot be changed mid-session (which would desync the BDF time-base
+    // and µV scaling fixed at Recorder::open()). Live readouts stay visible.
+    controlsBox_->setEnabled(!recording);
+    if (recording) {
+        controlsBox_->setToolTip("Locked during recording");
+    } else {
+        controlsBox_->setToolTip({});
+    }
 }
 
 } // namespace studio

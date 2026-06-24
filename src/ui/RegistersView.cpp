@@ -182,6 +182,11 @@ RegistersView::RegistersView(SessionController* controller, QWidget* parent)
     connect(biasEnabledCheck_, &QCheckBox::toggled, this, &RegistersView::onAnyControlChanged);
     connect(applyButton_,      &QPushButton::clicked, this, &RegistersView::onApplyClicked);
 
+    // Disable controls while recording so device config cannot change under
+    // an in-progress BDF session (time-base and µV scaling are fixed at open()).
+    connect(controller_, &SessionController::recordingChanged,
+            this, &RegistersView::onRecordingChanged);
+
     // Initial preview
     refreshPreview();
 }
@@ -239,6 +244,27 @@ void RegistersView::refreshPreview()
         lines.append(tokens.mid(i, 4).join("  "));
     }
     hexPreview_->setPlainText(lines.join('\n'));
+}
+
+void RegistersView::onRecordingChanged(bool recording)
+{
+    // Disable all editing controls and the Apply button while recording.
+    // Prevents mid-recording device config changes that would desync the
+    // BDF time-base and µV scaling (both fixed at Recorder::open()).
+    applyButton_->setEnabled(!recording);
+    sampleRateCombo_->setEnabled(!recording);
+    for (int ch = 0; ch < 8; ++ch) {
+        gainCombo_[ch]->setEnabled(!recording);
+        muxCombo_[ch]->setEnabled(!recording);
+    }
+    srb1Check_->setEnabled(!recording);
+    biasEnabledCheck_->setEnabled(!recording);
+
+    if (recording) {
+        applyButton_->setToolTip("Locked during recording");
+    } else {
+        applyButton_->setToolTip({});
+    }
 }
 
 } // namespace studio

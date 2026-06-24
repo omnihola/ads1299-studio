@@ -29,6 +29,7 @@ public:
 private slots:
     void onAnyControlChanged();
     void onApplyClicked();
+    void onRecordingChanged(bool recording);
 
 private:
     // Build a DeviceConfig immutably from the current state of all controls.

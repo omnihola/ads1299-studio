@@ -134,6 +134,15 @@ DeviceConfig SessionController::config() const
 
 void SessionController::applyConfig(const DeviceConfig& cfg)
 {
+    // Guard: config is frozen while a recording is in progress. A mid-recording
+    // change would silently desync the BDF time-base (fixed at Recorder::open())
+    // and the µV scaling (also fixed at open()), so we reject it entirely.
+    if (state_.load(std::memory_order_relaxed) == State::Recording) {
+        Logger::instance().log("warn", "SessionController.applyConfig",
+                               QJsonObject{{"ignored", "recording in progress"}});
+        return;
+    }
+
     config_ = cfg;
     Logger::instance().log("info", "SessionController.applyConfig",
                            QJsonObject{{"sampleRate", cfg.sampleRate()}});

@@ -8,6 +8,7 @@
 // Namespace: studio
 
 #include <QWidget>
+#include <QGroupBox>
 #include <QLabel>
 #include <QComboBox>
 
@@ -43,6 +44,7 @@ public:
 private slots:
     void onComboChanged();
     void onConfigChanged(studio::DeviceConfig cfg);
+    void onRecordingChanged(bool recording);
 
 private:
     void buildUi();
@@ -50,6 +52,7 @@ private:
 
     SessionController* controller_ = nullptr;
 
+    QGroupBox* controlsBox_ = nullptr;
     QComboBox* spsCombo_  = nullptr;
     QComboBox* gainCombo_ = nullptr;
 
