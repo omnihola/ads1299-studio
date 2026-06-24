@@ -124,6 +124,16 @@ private slots:
             "ch0_uV,ch1_uV,ch2_uV,ch3_uV,ch4_uV,ch5_uV,ch6_uV,ch7_uV,flag";
         QCOMPARE(headerStr, expectedHeader);
 
+        // Column-count invariant: EVERY data row (real and drop_pad) must have the
+        // exact same number of fields as the header, or the CSV is malformed for
+        // downstream analysis tools. Guards the gap-row writer in particular.
+        for (int r = 1; r < rows.size(); ++r) {
+            QVERIFY2(rows[r].size() == header.size(),
+                     qPrintable(QString("Row %1 has %2 columns, expected %3: %4")
+                                    .arg(r).arg(rows[r].size()).arg(header.size())
+                                    .arg(rows[r].join(','))));
+        }
+
         // ----------------------------------------------------------------
         // Helper: column index by name
         // ----------------------------------------------------------------
