@@ -149,7 +149,7 @@ void MonitorView::buildLayout()
 
     pauseButton_ = new QPushButton("Pause", controlBar);
     pauseButton_->setCheckable(true);
-    pauseButton_->setFixedWidth(64);
+    pauseButton_->setMinimumWidth(92);  // wide enough for "Resume" without clipping
     connect(pauseButton_, &QPushButton::toggled, this, [this](bool checked) {
         paused_ = checked;
         pauseButton_->setText(checked ? "Resume" : "Pause");
@@ -233,7 +233,9 @@ void MonitorView::buildLayout()
     controlLayout->addStretch();
     controlLayout->addWidget(uvLabel);
     controlLayout->addWidget(uvDivCombo_);
+    controlLayout->addSpacing(6);
     controlLayout->addWidget(autoScaleBox_);
+    controlLayout->addSpacing(4);  // keep "Auto" off the right edge
 
     // ---- GL waveform plot ----------------------------------------------
     glPlot_ = new studio::gl::GlWaveformWidget(this);
