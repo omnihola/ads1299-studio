@@ -53,6 +53,15 @@ bool SessionExporter::exportTo(const QString& basePath,
         return false;
     }
 
+    // Roll back files already copied so a mid-export failure (e.g. disk full)
+    // leaves no partial set behind — export is all-or-nothing.
+    const auto rollback = [&copied]() {
+        for (const QString& f : copied) {
+            QFile::remove(f);
+        }
+        copied.clear();
+    };
+
     for (const QString& srcPath : sources) {
         const QString fileName = QFileInfo(srcPath).fileName();
         const QString destPath = QDir(destDir).filePath(fileName);
@@ -61,12 +70,14 @@ bool SessionExporter::exportTo(const QString& basePath,
         if (QFile::exists(destPath)) {
             if (!QFile::remove(destPath)) {
                 error = QString("Could not overwrite existing file: %1").arg(destPath);
+                rollback();
                 return false;
             }
         }
 
         if (!QFile::copy(srcPath, destPath)) {
             error = QString("Failed to copy %1 to %2").arg(srcPath, destPath);
+            rollback();
             return false;
         }
 

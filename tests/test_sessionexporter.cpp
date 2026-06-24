@@ -93,6 +93,33 @@ private slots:
         QVERIFY(!error.isEmpty());
     }
 
+    // A mid-export failure must leave NO partial files behind (all-or-nothing).
+    void exportRollsBackOnPartialFailure()
+    {
+        QTemporaryDir srcDir, dstDir;
+        QVERIFY(srcDir.isValid());
+        QVERIFY(dstDir.isValid());
+
+        const QString base = srcDir.path() + "/sess";
+        writeFile(base + ".bdf", QByteArray("bdf-payload"));
+        writeFile(base + ".csv", QByteArray("csv-payload"));
+
+        // Force the .csv copy to fail (after .bdf already copies) by placing a
+        // DIRECTORY where the dest .csv file should go — QFile::remove/copy fails on it.
+        QVERIFY(QDir(dstDir.path()).mkdir("sess.csv"));
+
+        QStringList copied;
+        QString error;
+        const bool ok = SessionExporter::exportTo(base, dstDir.path(), copied, error);
+
+        QVERIFY2(!ok, "export must fail when a destination file cannot be written");
+        QVERIFY(!error.isEmpty());
+        // The .bdf copied before the failure must have been rolled back.
+        QVERIFY2(!QFile::exists(dstDir.path() + "/sess.bdf"),
+                 "partial export must be rolled back (no leftover .bdf)");
+        QVERIFY(copied.isEmpty());
+    }
+
     void exportOverwrites()
     {
         QTemporaryDir srcDir, dstDir;
