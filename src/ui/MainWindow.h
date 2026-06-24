@@ -11,6 +11,7 @@
 
 #include "app/AppState.h"          // studio::State, studio::Metrics
 #include "ui/theme/LedIndicator.h" // studio::LedIndicator
+#include "ui/AlertBar.h"           // studio::AlertBar
 
 class QAction;
 class QTimer;
@@ -57,6 +58,9 @@ private:
     QAction* connectAction_  = nullptr;
     QAction* startAction_    = nullptr;
     QAction* recordAction_   = nullptr;
+
+    // ---- Alert bar (above tabs) ---------------------------------------------
+    AlertBar* alertBar_ = nullptr;
 
     // ---- Central tab widget -------------------------------------------------
     QTabWidget* tabs_ = nullptr;

@@ -7,6 +7,7 @@
 #include <QAction>
 #include <QDockWidget>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QStatusBar>
@@ -23,6 +24,7 @@
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "ui/AlertBar.h"
 #include "ui/AcquisitionPanel.h"
 #include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
@@ -205,7 +207,19 @@ void MainWindow::buildTabs()
     recordingPanel_->setObjectName("recordingTab");
     tabs_->addTab(recordingPanel_, "Recording");
 
-    setCentralWidget(tabs_);
+    // Wrap alert bar + tab widget in a container so the alert bar is always
+    // visible above all tabs.
+    auto* central  = new QWidget(this);
+    auto* vLayout  = new QVBoxLayout(central);
+    vLayout->setContentsMargins(0, 0, 0, 0);
+    vLayout->setSpacing(0);
+
+    alertBar_ = new AlertBar(controller_, central);
+    alertBar_->setObjectName("alertBar");
+    vLayout->addWidget(alertBar_);
+    vLayout->addWidget(tabs_);
+
+    setCentralWidget(central);
 }
 
 void MainWindow::buildStatusBar()

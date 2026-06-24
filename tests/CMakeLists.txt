@@ -178,3 +178,12 @@ add_executable(test_displayfilter test_displayfilter.cpp)
 set_target_properties(test_displayfilter PROPERTIES AUTOMOC ON)
 target_link_libraries(test_displayfilter PRIVATE studio_core Qt6::Test)
 add_test(NAME test_displayfilter COMMAND test_displayfilter)
+
+add_executable(test_alertbar
+    test_alertbar.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/AlertBar.cpp)
+set_target_properties(test_alertbar PROPERTIES AUTOMOC ON)
+target_include_directories(test_alertbar PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_alertbar PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_alertbar COMMAND test_alertbar)
+set_tests_properties(test_alertbar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
