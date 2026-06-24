@@ -113,7 +113,12 @@ void RecordingPanel::buildUi()
 
     writeCsvCheckBox_ = new QCheckBox("Write per-sample CSV (large at high rates)", this);
     writeCsvCheckBox_->setObjectName("writeCsv");
-    writeCsvCheckBox_->setChecked(true);  // on by default — BDF is always written
+    // Remember the user's last CSV choice across launches (defaults to on).
+    writeCsvCheckBox_->setChecked(
+        QSettings().value(settings::kRecordingWriteCsv, true).toBool());
+    connect(writeCsvCheckBox_, &QCheckBox::toggled, this, [](bool on) {
+        QSettings().setValue(settings::kRecordingWriteCsv, on);
+    });
     writeCsvCheckBox_->setToolTip(
         "Also write the full per-sample CSV alongside the lossless BDF. "
         "Uncheck for long/high-rate sessions to save disk and CPU (BDF is unaffected).");

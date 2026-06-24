@@ -15,6 +15,7 @@ inline constexpr auto kWindowGeometry = "mainWindow/geometry";
 
 // Recording
 inline constexpr auto kRecordingOutputFolder = "recording/outputFolder";
+inline constexpr auto kRecordingWriteCsv     = "recording/writeCsv";
 
 // Acquisition
 inline constexpr auto kAcqSampleRate = "acq/sampleRate";
