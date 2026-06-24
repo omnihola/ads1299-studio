@@ -87,6 +87,28 @@ private slots:
         bytes[2] = 0xF7u;  // bit3 clear (0b11110111)
         QCOMPARE(DeviceConfig::fromRegisterBytes(bytes).biasEnabled(), false);
     }
+
+    // Exhaustive round-trip of the hardware-register codecs. These feed the real
+    // ADS1299 register writes (MMB0 path), so every supported gain/mux/rate must
+    // encode→decode back to itself. Guards a silent bit error from corrupting the
+    // gain or sample rate sent to the device.
+    void registerCodecsRoundTripAllValues()
+    {
+        // CHnSET = gain[6:4] | mux[2:0] — gain and mux must decode independently.
+        for (int gain : {1, 2, 4, 6, 8, 12, 24}) {
+            for (int mux = 0; mux <= 7; ++mux) {
+                const uint8_t chnset = static_cast<uint8_t>(
+                    (regs::encodeGain(gain) << 4u) | regs::encodeMux(mux));
+                QCOMPARE(regs::decodeGain(chnset), gain);
+                QCOMPARE(regs::decodeMux(chnset),  mux);
+            }
+        }
+        // CONFIG1 = 0x90 base | DR[2:0].
+        for (int sps : {250, 500, 1000, 2000, 4000, 8000, 16000}) {
+            const uint8_t config1 = static_cast<uint8_t>(0x90u | regs::encodeSampleRate(sps));
+            QCOMPARE(regs::decodeSampleRate(config1), sps);
+        }
+    }
 };
 
 QTEST_MAIN(TestDeviceConfig)
