@@ -20,6 +20,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStorageInfo>
 
 #include "app/SettingsKeys.h"
 #include <QTimer>
@@ -221,6 +222,25 @@ void RecordingPanel::onRecordClicked()
     const QString folder    = folderEdit_->text().trimmed();
     // Remember this (validated) folder so the next launch defaults to it.
     QSettings().setValue(settings::kRecordingOutputFolder, folder);
+
+    // ── Low-disk-space guard ─────────────────────────────────────────────────
+    // High sample rates fill a volume fast (BDF + per-sample CSV); a disk that
+    // fills mid-session loses data. Warn (but let the operator proceed) when the
+    // output volume is low on space.
+    {
+        constexpr qint64 kLowSpaceBytes = 1024LL * 1024 * 1024;  // 1 GB
+        const QStorageInfo storage(folder);
+        if (storage.isValid() && storage.isReady()
+            && storage.bytesAvailable() < kLowSpaceBytes) {
+            const qint64 freeMb = storage.bytesAvailable() / (1024 * 1024);
+            const auto ret = QMessageBox::warning(
+                this, "Low Disk Space",
+                QString("Only %1 MB free on the output volume. Recording can fill "
+                        "this quickly at high sample rates. Continue anyway?").arg(freeMb),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (ret != QMessageBox::Yes) return;
+        }
+    }
 
     // ── Signal-quality gate ──────────────────────────────────────────────────
     // Show the per-channel lead-off dialog unless the operator opted out.
