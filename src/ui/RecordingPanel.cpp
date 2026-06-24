@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -77,11 +78,14 @@ void RecordingPanel::buildUi()
     // lazily at record time (validateInputs), so launching the app doesn't litter
     // the filesystem if recording is never used.
     {
+        // Prefer the folder the user last used (persisted), else a sensible default.
+        const QString saved = QSettings().value("recording/outputFolder").toString();
         const QString defaultDir =
             QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
             + "/ADS1299 Recordings";
-        if (!defaultDir.isEmpty())
-            folderEdit_->setText(defaultDir);
+        const QString initial = saved.isEmpty() ? defaultDir : saved;
+        if (!initial.isEmpty())
+            folderEdit_->setText(initial);
     }
     browseButton_ = new QPushButton("Browse…", this);
     browseButton_->setObjectName("browse");
@@ -213,6 +217,8 @@ void RecordingPanel::onRecordClicked()
 
     const QString subjectId = subjectIdEdit_->text().trimmed();
     const QString folder    = folderEdit_->text().trimmed();
+    // Remember this (validated) folder so the next launch defaults to it.
+    QSettings().setValue("recording/outputFolder", folder);
     const QString ts        = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
     const QString basePath  = folder + "/" + subjectId + "_" + ts;
 
@@ -266,6 +272,8 @@ void RecordingPanel::onBrowseClicked()
     const QString dir = QFileDialog::getExistingDirectory(this, "Select Output Folder", start);
     if (!dir.isEmpty()) {
         folderEdit_->setText(dir);
+        // Persist the explicit user choice immediately.
+        QSettings().setValue("recording/outputFolder", dir);
     }
 }
 
