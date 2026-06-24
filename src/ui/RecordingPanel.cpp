@@ -346,7 +346,8 @@ void RecordingPanel::setRecordingMode(bool recording)
         updateReadout();
     } else {
         readoutTimer_->stop();
-        readoutLabel_->setText("--:-- | 0 samples");
+        // Keep the final readout visible (don't blank it) so the operator can see
+        // what was just captured. It refreshes when the next recording starts.
     }
 }
 
