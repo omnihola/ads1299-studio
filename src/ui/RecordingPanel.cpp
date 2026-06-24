@@ -23,6 +23,7 @@
 
 #include "app/AppState.h"
 #include "app/SessionController.h"
+#include "core/recording/SessionExporter.h"
 #include "core/recording/SessionMetadata.h"
 
 namespace studio {
@@ -117,6 +118,13 @@ void RecordingPanel::buildUi()
     controls->addStretch();
     mainLayout->addLayout(controls);
 
+    // ── Export button ──
+    exportButton_ = new QPushButton("Export session…", this);
+    exportButton_->setObjectName("exportSession");
+    exportButton_->setEnabled(false);  // enabled only after a session has been recorded
+    exportButton_->setToolTip("Copy session files (.bdf, .csv, .meta.json) to a chosen folder");
+    mainLayout->addWidget(exportButton_);
+
     // ── Live readout ──
     readoutLabel_ = new QLabel("--:-- | 0 samples", this);
     readoutLabel_->setObjectName("readoutLabel");
@@ -136,6 +144,7 @@ void RecordingPanel::wireSignals()
     connect(stopButton_,      &QPushButton::clicked, this, &RecordingPanel::onStopClicked);
     connect(addMarkerButton_, &QPushButton::clicked, this, &RecordingPanel::onAddMarkerClicked);
     connect(browseButton_,    &QPushButton::clicked, this, &RecordingPanel::onBrowseClicked);
+    connect(exportButton_,    &QPushButton::clicked, this, &RecordingPanel::onExportClicked);
     connect(readoutTimer_,    &QTimer::timeout,      this, &RecordingPanel::updateReadout);
     connect(controller_,      &SessionController::recordingChanged,
             this,             &RecordingPanel::onRecordingChanged);
@@ -212,6 +221,7 @@ void RecordingPanel::onRecordClicked()
                               "and the output folder writable.");
         return;
     }
+    lastBasePath_ = basePath;
     recordElapsed_.restart();
     // Button states are updated by onRecordingChanged via the controller signal.
 }
@@ -256,6 +266,9 @@ void RecordingPanel::setRecordingMode(bool recording)
     folderEdit_->setEnabled(!recording);
     browseButton_->setEnabled(!recording);
 
+    // Export is available only when there is a completed session and we are not recording.
+    exportButton_->setEnabled(!recording && !lastBasePath_.isEmpty());
+
     if (recording) {
         recordElapsed_.restart();
         readoutTimer_->start();
@@ -278,6 +291,29 @@ void RecordingPanel::updateReadout()
             .arg(minutes, 2, 10, QChar('0'))
             .arg(seconds, 2, 10, QChar('0'))
             .arg(samples));
+}
+
+void RecordingPanel::onExportClicked()
+{
+    if (lastBasePath_.isEmpty()) return;
+
+    const QString dest = QFileDialog::getExistingDirectory(
+        this, "Export session to folder…");
+    if (dest.isEmpty()) return;
+
+    QStringList copied;
+    QString error;
+    const bool ok = SessionExporter::exportTo(lastBasePath_, dest, copied, error);
+
+    if (ok) {
+        QMessageBox::information(
+            this, "Export Complete",
+            QString("Exported %1 file(s) to %2.").arg(copied.size()).arg(dest));
+    } else {
+        QMessageBox::warning(
+            this, "Export Failed",
+            error);
+    }
 }
 
 // ─── Toolbar entry points ────────────────────────────────────────────────────

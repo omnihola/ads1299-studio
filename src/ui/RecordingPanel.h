@@ -38,6 +38,7 @@ private slots:
     void onStopClicked();
     void onAddMarkerClicked();
     void onBrowseClicked();
+    void onExportClicked();
     void onRecordingChanged(bool recording);
     void updateReadout();
 
@@ -61,6 +62,10 @@ private:
     QPushButton*    stopButton_      = nullptr;
     QPushButton*    addMarkerButton_ = nullptr;
     QLineEdit*      markerLabelEdit_ = nullptr;
+    QPushButton*    exportButton_    = nullptr;
+
+    // Tracks the base path of the most recently started recording (persists after stop).
+    QString         lastBasePath_;
 
     // Live readout
     QLabel*         readoutLabel_    = nullptr;

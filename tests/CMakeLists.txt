@@ -206,3 +206,8 @@ target_include_directories(test_shortcuts PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_shortcuts PRIVATE studio_core Qt6::Widgets Qt6::Test)
 add_test(NAME test_shortcuts COMMAND test_shortcuts)
 set_tests_properties(test_shortcuts PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_sessionexporter test_sessionexporter.cpp)
+set_target_properties(test_sessionexporter PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessionexporter PRIVATE studio_core Qt6::Test)
+add_test(NAME sessionexporter COMMAND test_sessionexporter)
