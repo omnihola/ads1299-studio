@@ -129,8 +129,11 @@ DeviceConfig DeviceConfig::fromRegisterBytes(const std::array<uint8_t, 23>& byte
     // CONFIG1 (index 0): decode DR[2:0]
     cfg.m_sampleRate = regs::decodeSampleRate(bytes[0]);
 
-    // CONFIG3 (index 2): biasEnabled = (byte == 0xEC)
-    cfg.m_biasEnabled = (bytes[2] == 0xECu);
+    // CONFIG3 (index 2): biasEnabled tracks the PD_BIAS bit (bit 3). Test the bit
+    // rather than the exact byte so a real device's CONFIG3 read-back (which may
+    // carry other reserved/status bits) still parses correctly. Our writer emits
+    // 0xEC (bit3=1) when enabled and 0xE0 (bit3=0) when disabled, so this round-trips.
+    cfg.m_biasEnabled = (bytes[2] & 0x08u) != 0u;
 
     // CH1SET..CH8SET (indices 4..11)
     for (int ch = 0; ch < 8; ++ch) {

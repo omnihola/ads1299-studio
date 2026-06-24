@@ -68,6 +68,25 @@ private slots:
         QCOMPARE(a.sampleRate(), 500);
         QCOMPARE(b.sampleRate(), 1000);
     }
+
+    // biasEnabled is decoded from the CONFIG3 PD_BIAS bit (bit 3), not an exact
+    // byte match — so a real device read-back carrying other reserved/status bits
+    // in CONFIG3 still parses correctly.
+    void biasEnabledParsedFromBitNotExactByte()
+    {
+        auto bytes = DeviceConfig().withBiasEnabled(true).toRegisterBytes();
+        // Enabled writer emits 0xEC (bit3 set). Set extra reserved/status bits.
+        bytes[2] = 0xEDu;  // 0xEC | bit0
+        QCOMPARE(DeviceConfig::fromRegisterBytes(bytes).biasEnabled(), true);
+        bytes[2] = 0xFEu;  // many bits, bit3 still set
+        QCOMPARE(DeviceConfig::fromRegisterBytes(bytes).biasEnabled(), true);
+
+        // Disabled: bit3 clear, even with other bits set.
+        bytes[2] = 0xE2u;  // 0xE0 | bit1, bit3 clear
+        QCOMPARE(DeviceConfig::fromRegisterBytes(bytes).biasEnabled(), false);
+        bytes[2] = 0xF7u;  // bit3 clear (0b11110111)
+        QCOMPARE(DeviceConfig::fromRegisterBytes(bytes).biasEnabled(), false);
+    }
 };
 
 QTEST_MAIN(TestDeviceConfig)
