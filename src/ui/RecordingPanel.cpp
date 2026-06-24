@@ -221,8 +221,24 @@ void RecordingPanel::onRecordClicked()
     const QString folder    = folderEdit_->text().trimmed();
     // Remember this (validated) folder so the next launch defaults to it.
     QSettings().setValue(settings::kRecordingOutputFolder, folder);
-    const QString ts        = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
-    const QString basePath  = folder + "/" + subjectId + "_" + ts;
+
+    // ── Signal-quality gate ──────────────────────────────────────────────────
+    // Show the per-channel lead-off dialog unless the operator opted out.
+    // The headless path (controller_->startRecording called directly in tests)
+    // bypasses this gate entirely — it lives only in the UI flow.
+    // Shown BEFORE stamping the start time so the recorded start time and the
+    // filename reflect the actual recording start, not the button click (the
+    // operator may sit in this dialog for a while).
+    if (!skipQualityCheckBox_->isChecked()) {
+        PreRecordCheckDialog dlg(lastLeadOffP_, lastLeadOffN_, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+    }
+
+    // Stamp the start instant now (post-dialog); use it for both the filename
+    // (local time) and the metadata start time (UTC) so they stay consistent.
+    const QDateTime now     = QDateTime::currentDateTime();
+    const QString   ts      = now.toString("yyyyMMdd-HHmmss");
+    const QString   basePath = folder + "/" + subjectId + "_" + ts;
 
     // FIX 4: pass the actual configured sample rate; SessionController::startRecording
     // will override it anyway via withSampleRate(config_.sampleRate()), but keeping
@@ -233,16 +249,7 @@ void RecordingPanel::onRecordClicked()
         .withMontage(montageEdit_->text().trimmed())
         .withNotes(notesEdit_->toPlainText())
         .withSampleRate(sr)
-        .withStartTimeUtc(QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
-
-    // ── Signal-quality gate ──────────────────────────────────────────────────
-    // Show the per-channel lead-off dialog unless the operator opted out.
-    // The headless path (controller_->startRecording called directly in tests)
-    // bypasses this gate entirely — it lives only in the UI flow.
-    if (!skipQualityCheckBox_->isChecked()) {
-        PreRecordCheckDialog dlg(lastLeadOffP_, lastLeadOffN_, this);
-        if (dlg.exec() != QDialog::Accepted) return;
-    }
+        .withStartTimeUtc(now.toUTC().toString(Qt::ISODateWithMs));
 
     if (!controller_->startRecording(basePath, meta)) {
         QMessageBox::critical(this, "Recording Error",
