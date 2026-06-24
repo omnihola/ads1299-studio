@@ -38,6 +38,10 @@ public:
     // Adjust the assumed sample rate used for time axis (default 250 Hz)
     void setSampleRate(int hz);
 
+    // Toggle pause state and update the Pause button's visual state.
+    // Safe to call from a QShortcut in MainWindow.
+    void togglePause();
+
 public slots:
     void onRenderTick();
 

@@ -102,6 +102,12 @@ void MonitorView::setSampleRate(int hz)
     }
 }
 
+void MonitorView::togglePause()
+{
+    // Flip the paused_ state via the button so its visual check state stays in sync.
+    pauseButton_->setChecked(!paused_);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Render tick
 // ──────────────────────────────────────────────────────────────────────────────

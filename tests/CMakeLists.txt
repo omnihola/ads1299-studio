@@ -197,3 +197,12 @@ target_include_directories(test_prerecordcheck PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_prerecordcheck PRIVATE studio_core Qt6::Widgets Qt6::Test)
 add_test(NAME test_prerecordcheck COMMAND test_prerecordcheck)
 set_tests_properties(test_prerecordcheck PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_shortcuts
+    test_shortcuts.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/ShortcutsHelpDialog.cpp)
+set_target_properties(test_shortcuts PROPERTIES AUTOMOC ON)
+target_include_directories(test_shortcuts PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_shortcuts PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_shortcuts COMMAND test_shortcuts)
+set_tests_properties(test_shortcuts PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

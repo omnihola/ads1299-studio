@@ -14,11 +14,13 @@
 #include "ui/AlertBar.h"           // studio::AlertBar
 
 class QAction;
+class QShortcut;
 class QTimer;
 
 namespace studio {
 
 class SessionController;
+class MonitorView;
 class RecordingPanel;
 class ImpedanceView;
 
@@ -64,6 +66,9 @@ private:
 
     // ---- Central tab widget -------------------------------------------------
     QTabWidget* tabs_ = nullptr;
+
+    // ---- Monitor view (lives in the "Monitor" tab) --------------------------
+    MonitorView*    monitorView_    = nullptr;
 
     // ---- Recording panel (lives in the "Recording" tab) ---------------------
     RecordingPanel* recordingPanel_ = nullptr;
