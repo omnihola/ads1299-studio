@@ -2,6 +2,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
@@ -55,7 +56,20 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     hasError_        = false;
     samplesWritten_  = 0;
     paddedSamples_   = 0;
+    timelineIndex_   = 0;
     annotations_.clear();
+
+    // Parse recording start time from metadata; fall back to current UTC time.
+    recordingStart_ = QDateTime::fromString(meta.startTimeUtc(), Qt::ISODateWithMs);
+    if (!recordingStart_.isValid()) {
+        recordingStart_ = QDateTime::currentDateTimeUtc();
+    }
+
+    // Build per-channel ScaleConverters using the session gain settings.
+    const auto gains = meta.gainPerChannel();
+    for (int ch = 0; ch < kChannels; ++ch) {
+        converters_[ch] = ScaleConverter(gains[ch]);
+    }
 
     // ── 1. Open BDF+ file ────────────────────────────────────────────────────
     QString bdfPath = basePath_ + ".bdf";
@@ -73,10 +87,9 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     }
 
     // ── 2. Configure each signal ─────────────────────────────────────────────
-    auto gains = meta_.gainPerChannel();
-
+    // Note: converters_[] are already built above; reuse them for physical range.
     for (int ch = 0; ch < kChannels; ++ch) {
-        ScaleConverter sc(gains[ch]);
+        const ScaleConverter& sc = converters_[ch];
 
         // BDF digital range: 24-bit two's-complement
         constexpr int kDigMax =  8388607;
@@ -136,12 +149,15 @@ bool Recorder::open(const QString& basePath, const SessionMetadata& meta)
     }
     csvStream_.setDevice(&csvFile_);
 
-    // Write CSV header
-    csvStream_ << "seq,t_seconds";
+    // Write CSV header (research-grade: absolute timestamp, raw counts, µV, status, flag)
+    csvStream_ << "timestamp_utc,seq,t_seconds,statP,statN,gpio";
+    for (int c = 0; c < kChannels; ++c) {
+        csvStream_ << ",ch" << c << "_raw";
+    }
     for (int c = 0; c < kChannels; ++c) {
         csvStream_ << ",ch" << c << "_uV";
     }
-    csvStream_ << "\n";
+    csvStream_ << ",flag\n";
 
     // ── 5. Write initial meta.json ────────────────────────────────────────────
     writeMetaJson(false);
@@ -163,8 +179,6 @@ void Recorder::writeBatch(const EegFrameBatch& batch)
 {
     if (!isOpen_ || hasError_) return;
 
-    auto gains = meta_.gainPerChannel();
-
     for (const EegFrame& frame : batch) {
         // ── Accumulate into per-record buffer ─────────────────────────────────
         for (int ch = 0; ch < kChannels; ++ch) {
@@ -180,7 +194,8 @@ void Recorder::writeBatch(const EegFrameBatch& batch)
         }
 
         // ── CSV row ───────────────────────────────────────────────────────────
-        writeCsvRow(frame, samplesWritten_);
+        writeCsvRow(frame, timelineIndex_);
+        ++timelineIndex_;
 
         ++samplesWritten_;
     }
@@ -205,7 +220,8 @@ void Recorder::writeGap(quint32 nSamples)
         }
 
         // Write a zero-fill CSV row so CSV row count stays aligned with BDF.
-        writeGapCsvRow(samplesWritten_ + paddedSamples_);
+        writeGapCsvRow(timelineIndex_);
+        ++timelineIndex_;
 
         ++paddedSamples_;
     }
@@ -265,41 +281,84 @@ void Recorder::flushOneRecord()
 
 // ─── writeCsvRow ─────────────────────────────────────────────────────────────
 
-void Recorder::writeCsvRow(const EegFrame& frame, quint64 frameIndex)
+void Recorder::writeCsvRow(const EegFrame& frame, quint64 timelineIdx)
 {
-    auto gains = meta_.gainPerChannel();
-    double tSeconds = static_cast<double>(frameIndex) / static_cast<double>(sampleRate_);
+    const double tSeconds = static_cast<double>(timelineIdx) / static_cast<double>(sampleRate_);
 
-    csvStream_ << frame.seq << "," << tSeconds;
+    // Compute absolute UTC timestamp for this sample.
+    const qint64 msecOffset = static_cast<qint64>(
+        static_cast<double>(timelineIdx) * 1000.0 / static_cast<double>(sampleRate_));
+    const QString tsUtc = recordingStart_.addMSecs(msecOffset)
+                              .toUTC()
+                              .toString("yyyy-MM-ddThh:mm:ss.zzzZ");
+
+    // timestamp_utc, seq, t_seconds, statP, statN, gpio
+    csvStream_ << tsUtc
+               << "," << frame.seq
+               << "," << QString::number(tSeconds, 'f', 9)
+               << "," << static_cast<quint32>(frame.statP)
+               << "," << static_cast<quint32>(frame.statN)
+               << "," << static_cast<quint32>(frame.gpio);
+
+    // ch0_raw..ch7_raw
     for (int c = 0; c < kChannels; ++c) {
-        ScaleConverter sc(gains[c]);
-        csvStream_ << "," << sc.countsToMicrovolts(frame.ch[c]);
+        csvStream_ << "," << frame.ch[c];
     }
-    csvStream_ << "\n";
+
+    // ch0_uV..ch7_uV
+    for (int c = 0; c < kChannels; ++c) {
+        csvStream_ << "," << converters_[c].countsToMicrovolts(frame.ch[c]);
+    }
+
+    // flag (empty for real frames)
+    csvStream_ << ",\n";
 
     // Flush every 1000 rows to avoid large write bursts
-    if ((frameIndex % 1000) == 0) {
+    if ((timelineIdx % 1000) == 0) {
         csvStream_.flush();
     }
 }
 
 // ─── writeGapCsvRow ──────────────────────────────────────────────────────────
 
-void Recorder::writeGapCsvRow(quint64 frameIndex)
+void Recorder::writeGapCsvRow(quint64 timelineIdx)
 {
-    // Gap rows: seq field is blank, all channel values are 0.0 µV.
-    double tSeconds = static_cast<double>(frameIndex) / static_cast<double>(sampleRate_);
-    csvStream_ << "," << tSeconds;
+    // Gap rows: seq/statP/statN/gpio blank, all channel counts 0, flag "drop_pad".
+    const double tSeconds = static_cast<double>(timelineIdx) / static_cast<double>(sampleRate_);
+
+    const qint64 msecOffset = static_cast<qint64>(
+        static_cast<double>(timelineIdx) * 1000.0 / static_cast<double>(sampleRate_));
+    const QString tsUtc = recordingStart_.addMSecs(msecOffset)
+                              .toUTC()
+                              .toString("yyyy-MM-ddThh:mm:ss.zzzZ");
+
+    // timestamp_utc, blank seq, t_seconds, blank statP, blank statN, blank gpio
+    csvStream_ << tsUtc
+               << ","   // blank seq
+               << "," << QString::number(tSeconds, 'f', 9)
+               << ","   // blank statP
+               << ","   // blank statN
+               << ",";  // blank gpio (comma separates from next field)
+
+    // ch0_raw..ch7_raw — all zero
     for (int c = 0; c < kChannels; ++c) {
         csvStream_ << ",0";
     }
-    csvStream_ << "\n";
+
+    // ch0_uV..ch7_uV — all 0.0
+    for (int c = 0; c < kChannels; ++c) {
+        csvStream_ << ",0";
+    }
+
+    // flag
+    csvStream_ << ",drop_pad\n";
 }
 
 // ─── writeMetaJson ───────────────────────────────────────────────────────────
 
 void Recorder::writeMetaJson(bool isFinal)
 {
+    Q_UNUSED(isFinal)
     QJsonObject obj = meta_.toJson();
 
     obj["bdfFile"] = QFileInfo(basePath_ + ".bdf").fileName();
@@ -307,6 +366,28 @@ void Recorder::writeMetaJson(bool isFinal)
     obj["totalSamplesPerChannel"] = static_cast<qint64>(samplesWritten_);
     obj["paddedSamples"]          = static_cast<qint64>(paddedSamples_);
     obj["annotations"] = annotations_.toJson();
+
+    // Phase-9 enrichment: absolute start time, sample rate, per-channel gain, CSV columns
+    obj["recordingStartUtc"] = recordingStart_.toUTC().toString(Qt::ISODateWithMs);
+    obj["sampleRate"]        = meta_.sampleRate();
+
+    QJsonArray gainArr;
+    const auto gains = meta_.gainPerChannel();
+    for (int ch = 0; ch < kChannels; ++ch) {
+        gainArr.append(gains[ch]);
+    }
+    obj["gainPerChannel"] = gainArr;
+
+    static const QJsonArray kCsvColumns = QJsonArray{
+        "timestamp_utc", "seq", "t_seconds",
+        "statP", "statN", "gpio",
+        "ch0_raw", "ch1_raw", "ch2_raw", "ch3_raw",
+        "ch4_raw", "ch5_raw", "ch6_raw", "ch7_raw",
+        "ch0_uV",  "ch1_uV",  "ch2_uV",  "ch3_uV",
+        "ch4_uV",  "ch5_uV",  "ch6_uV",  "ch7_uV",
+        "flag"
+    };
+    obj["csvColumns"] = kCsvColumns;
 
     QString metaPath = basePath_ + ".meta.json";
     QFile f(metaPath);

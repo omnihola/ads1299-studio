@@ -36,20 +36,28 @@ MonitorView::MonitorView(SessionController* controller, QWidget* parent)
     stylePlot();
     setupGraphs();
 
-    // FIX 3: Initialise per-channel gains from the current device config so
-    // displayed µV values match the actual ADS1299 PGA gain (default 24, not 1).
+    // Initialise per-channel gains and sample rate from the current device
+    // config so displayed µV values and the time axis are correct from the start.
     if (controller_) {
-        const auto gainArr = controller_->config().gain();
+        const studio::DeviceConfig initialCfg = controller_->config();
+        const auto gainArr = initialCfg.gain();
         for (int c = 0; c < 8; ++c) {
             gains_[c] = gainArr[static_cast<size_t>(c)];
         }
-        // Refresh gains whenever the device config changes.
+        // Initialize display sample rate from the controller's current config
+        // (not hardcoded 250) so the time axis is correct immediately.
+        sampleRateHz_ = initialCfg.sampleRate();
+
+        // Refresh gains and sample rate whenever the device config changes.
+        // Also clear rolling buffers so a rate switch rescales cleanly.
         connect(controller_, &SessionController::configChanged,
                 this, [this](const studio::DeviceConfig& cfg) {
             const auto arr = cfg.gain();
             for (int c = 0; c < 8; ++c) {
                 gains_[c] = arr[static_cast<size_t>(c)];
             }
+            setSampleRate(cfg.sampleRate());
+            clear();
         });
     }
 

@@ -140,3 +140,36 @@ set_target_properties(test_connectmmb0 PROPERTIES AUTOMOC ON)
 target_link_libraries(test_connectmmb0 PRIVATE studio_core Qt6::Test)
 add_test(NAME test_connectmmb0 COMMAND test_connectmmb0)
 set_tests_properties(test_connectmmb0 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_rawcsv test_rawcsv.cpp)
+set_target_properties(test_rawcsv PROPERTIES AUTOMOC ON)
+target_link_libraries(test_rawcsv PRIVATE studio_core Qt6::Test)
+add_test(NAME test_rawcsv COMMAND test_rawcsv)
+set_tests_properties(test_rawcsv PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_highrate test_highrate.cpp)
+set_target_properties(test_highrate PROPERTIES AUTOMOC ON)
+target_link_libraries(test_highrate PRIVATE studio_core Qt6::Test)
+add_test(NAME test_highrate COMMAND test_highrate)
+set_tests_properties(test_highrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_acquisitionpanel
+    test_acquisitionpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/AcquisitionPanel.cpp)
+set_target_properties(test_acquisitionpanel PROPERTIES AUTOMOC ON)
+target_include_directories(test_acquisitionpanel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_acquisitionpanel PRIVATE studio_core Qt6::Widgets Qt6::Test)
+add_test(NAME test_acquisitionpanel COMMAND test_acquisitionpanel)
+set_tests_properties(test_acquisitionpanel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_startuprate test_startuprate.cpp)
+set_target_properties(test_startuprate PROPERTIES AUTOMOC ON)
+target_link_libraries(test_startuprate PRIVATE studio_core Qt6::Test)
+add_test(NAME test_startuprate COMMAND test_startuprate)
+set_tests_properties(test_startuprate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_configfreeze test_configfreeze.cpp)
+set_target_properties(test_configfreeze PROPERTIES AUTOMOC ON)
+target_link_libraries(test_configfreeze PRIVATE studio_core Qt6::Test)
+add_test(NAME test_configfreeze COMMAND test_configfreeze)
+set_tests_properties(test_configfreeze PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

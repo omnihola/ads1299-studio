@@ -21,5 +21,6 @@
 /.superpowers/
 
 # RE reference (TI source kept locally for interop; review licensing before publishing)
-/reference/ti-mmb0/cstyx/estyx/
-/reference/ti-mmb0/docs/ads1299evm-pdk.bin
+
+# TI reverse-engineering reference (kept local only; do not commit upstream GPL/CPL source)
+/reference/ti-mmb0/

@@ -134,6 +134,15 @@ DeviceConfig SessionController::config() const
 
 void SessionController::applyConfig(const DeviceConfig& cfg)
 {
+    // Guard: config is frozen while a recording is in progress. A mid-recording
+    // change would silently desync the BDF time-base (fixed at Recorder::open())
+    // and the µV scaling (also fixed at open()), so we reject it entirely.
+    if (state_.load(std::memory_order_relaxed) == State::Recording) {
+        Logger::instance().log("warn", "SessionController.applyConfig",
+                               QJsonObject{{"ignored", "recording in progress"}});
+        return;
+    }
+
     config_ = cfg;
     Logger::instance().log("info", "SessionController.applyConfig",
                            QJsonObject{{"sampleRate", cfg.sampleRate()}});
@@ -160,6 +169,15 @@ void SessionController::startStreaming()
     Logger::instance().log("info", "SessionController.startStreaming", {});
 
     workerThread_.start();
+
+    // Sync the source's sample rate to the configured rate before starting.
+    // This ensures the source matches config_ at stream startup, preventing the
+    // divergence where applyConfig hasn't been called by the user yet.
+    QMetaObject::invokeMethod(source_,
+        [this, sps = config_.sampleRate()]() {
+            source_->setSampleRate(sps);
+        },
+        Qt::QueuedConnection);
 
     // Start the source on the worker thread via a queued invocation.
     QMetaObject::invokeMethod(source_, &IDataSource::start, Qt::QueuedConnection);

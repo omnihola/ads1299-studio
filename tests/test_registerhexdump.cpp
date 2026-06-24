@@ -18,11 +18,11 @@ private slots:
 
 void TestRegisterHexDump::defaultConfig_containsConfig1()
 {
-    // Default DeviceConfig: 250 SPS → CONFIG1 = 0x90 | 0x06 = 0x96
+    // Default DeviceConfig: 500 SPS → CONFIG1 = 0x90 | 0x05 = 0x95
     studio::DeviceConfig cfg;
     const QString dump = studio::registerHexDump(cfg.toRegisterBytes());
-    QVERIFY2(dump.contains("CONFIG1=0x96"),
-             qPrintable(QString("Expected CONFIG1=0x96 in: %1").arg(dump)));
+    QVERIFY2(dump.contains("CONFIG1=0x95"),
+             qPrintable(QString("Expected CONFIG1=0x95 in: %1").arg(dump)));
 }
 
 void TestRegisterHexDump::defaultConfig_containsCh1set()
