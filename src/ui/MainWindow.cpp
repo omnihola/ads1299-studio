@@ -30,6 +30,7 @@
 #include "ui/MonitorView.h"
 #include "ui/RecordingPanel.h"
 #include "ui/RegistersView.h"
+#include "ui/SessionsView.h"
 #include "ui/ShortcutsHelpDialog.h"
 #include "ui/SpectrumView.h"
 
@@ -82,8 +83,8 @@ MainWindow::MainWindow(SessionController* controller, QWidget* parent)
         }
     });
 
-    // Ctrl+1..Ctrl+5 — switch between the five main tabs
-    for (int i = 0; i < 5; ++i) {
+    // Ctrl+1..Ctrl+6 — switch between the six main tabs
+    for (int i = 0; i < 6; ++i) {
         auto* sc = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i + 1)), this);
         connect(sc, &QShortcut::activated, this, [this, i]() {
             tabs_->setCurrentIndex(i);
@@ -241,6 +242,11 @@ void MainWindow::buildTabs()
     recordingPanel_ = new RecordingPanel(controller_, this);
     recordingPanel_->setObjectName("recordingTab");
     tabs_->addTab(recordingPanel_, "Recording");
+
+    // Sessions tab — browse/reveal/export past recordings.
+    sessionsView_ = new SessionsView(QString(), this);
+    sessionsView_->setObjectName("sessionsTab");
+    tabs_->addTab(sessionsView_, "Sessions");
 
     // Wrap alert bar + tab widget in a container so the alert bar is always
     // visible above all tabs.

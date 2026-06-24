@@ -211,3 +211,8 @@ add_executable(test_sessionexporter test_sessionexporter.cpp)
 set_target_properties(test_sessionexporter PROPERTIES AUTOMOC ON)
 target_link_libraries(test_sessionexporter PRIVATE studio_core Qt6::Test)
 add_test(NAME sessionexporter COMMAND test_sessionexporter)
+
+add_executable(test_sessionscanner test_sessionscanner.cpp)
+set_target_properties(test_sessionscanner PROPERTIES AUTOMOC ON)
+target_link_libraries(test_sessionscanner PRIVATE studio_core Qt6::Test)
+add_test(NAME test_sessionscanner COMMAND test_sessionscanner)

@@ -23,6 +23,7 @@ class SessionController;
 class MonitorView;
 class RecordingPanel;
 class ImpedanceView;
+class SessionsView;
 
 class MainWindow : public QMainWindow
 {
@@ -75,6 +76,9 @@ private:
 
     // ---- Impedance view (lives in the "Impedance" tab) ----------------------
     ImpedanceView*  impedanceView_  = nullptr;
+
+    // ---- Sessions view (lives in the "Sessions" tab) ------------------------
+    SessionsView*   sessionsView_   = nullptr;
 
     // ---- Status bar widgets -------------------------------------------------
     LedIndicator* linkLed_      = nullptr;
