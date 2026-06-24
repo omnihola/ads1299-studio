@@ -102,3 +102,8 @@ add_executable(test_serialsource test_serialsource.cpp)
 set_target_properties(test_serialsource PROPERTIES AUTOMOC ON)
 target_link_libraries(test_serialsource PRIVATE studio_core Qt6::Test)
 add_test(NAME test_serialsource COMMAND test_serialsource)
+
+add_executable(test_libusb_smoke test_libusb_smoke.cpp)
+set_target_properties(test_libusb_smoke PROPERTIES AUTOMOC ON)
+target_link_libraries(test_libusb_smoke PRIVATE studio_core Qt6::Test)
+add_test(NAME test_libusb_smoke COMMAND test_libusb_smoke)

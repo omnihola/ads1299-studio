@@ -8,6 +8,8 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets SerialPort PrintSupport Test)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
 # Vendored third-party
 add_library(qcustomplot STATIC third_party/qcustomplot/qcustomplot.cpp)
@@ -37,6 +39,11 @@ else()
     target_include_directories(studio_core INTERFACE src)
     target_link_libraries(studio_core INTERFACE Qt6::Core Qt6::SerialPort edflib kissfft)
 endif()
+
+# Wire libusb-1.0 into studio_core (PUBLIC so test targets and exe also get it)
+target_include_directories(studio_core PUBLIC ${LIBUSB_INCLUDE_DIRS})
+target_link_libraries(studio_core PUBLIC ${LIBUSB_LINK_LIBRARIES})
+target_link_directories(studio_core PUBLIC ${LIBUSB_LIBRARY_DIRS})
 
 # UI sources
 file(GLOB_RECURSE UI_SOURCES CONFIGURE_DEPENDS src/ui/*.cpp)
