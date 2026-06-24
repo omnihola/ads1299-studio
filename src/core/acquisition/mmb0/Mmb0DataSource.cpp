@@ -111,14 +111,17 @@ void Mmb0DataSource::stop() {
 void Mmb0DataSource::pollOnce() {
     if (!running_) return;
 
+    const uint32_t want = uint32_t(blocksizeSamples_ * 27);
     QByteArray buf;
-    bool ok = client_->readFid(dataFid_, 0,
-                               uint32_t(blocksizeSamples_ * 27),
-                               buf);
-    if (!ok) {
-        emit errorOccurred(QStringLiteral("Read from /data failed: ") + client_->lastError());
-        stop();
-        return;
+    while (buf.size() < int(want)) {
+        QByteArray chunk;
+        if (!client_->readFid(dataFid_, 0, want - uint32_t(buf.size()), chunk)) {
+            emit errorOccurred(QStringLiteral("Read from /data failed: ") + client_->lastError());
+            stop();
+            return;
+        }
+        if (chunk.isEmpty()) break;   // device had nothing more this poll
+        buf.append(chunk);
     }
 
     if (!buf.isEmpty()) {
@@ -143,7 +146,7 @@ bool Mmb0DataSource::bringUp() {
         return false;
     }
 
-    if (!client_->attach(QString(), QStringLiteral("ads1299evm"))) {
+    if (!client_->attach(QString(), QString())) {
         emit errorOccurred(QStringLiteral("attach failed: ") + client_->lastError());
         return false;
     }

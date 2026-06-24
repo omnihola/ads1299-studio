@@ -61,7 +61,7 @@ static QByteArray encodeRwalk(uint16_t tag, uint16_t nwqid) {
     for (uint16_t i=0;i<nwqid;++i) putQid(b,0,0,uint64_t(i)+10);
     patchSize(b); return b;
 }
-static QByteArray encodeRopen(uint16_t tag, uint32_t iounit=2048) {
+static QByteArray encodeRopen(uint16_t tag, uint32_t iounit=200) {
     QByteArray b = makeHdr(uint8_t(MsgType::Ropen), tag);
     putQid(b,0,0,42); put32(b,iounit); patchSize(b); return b;
 }
@@ -115,12 +115,19 @@ static QByteArray makeSyntheticRecord(int counter) {
 //   - stores writes to conf/*, blocksize_samples, acquire nodes
 //   - for reads of the data path, returns blocksizeSamples synthetic records
 
+static constexpr int kFakeChunkSize = 200;  // max bytes returned per Rread
+
 class FakeMmb0Transport : public ITransport {
 public:
     QMap<QString, QByteArray> files;   // path -> last written bytes
     QMap<uint32_t, QString>   fidPath; // fid -> resolved path
     int blocksizeSamples = 3;          // default; updated when client writes blocksize
     int sampleCounter = 0;             // increments with each read of /data
+
+    // Streaming position: we build the full block once per logical poll and
+    // serve it in kFakeChunkSize slices so pollOnce must loop.
+    QByteArray dataBlock;              // current block being served
+    int        dataBlockPos = 0;       // bytes consumed from dataBlock so far
 
     bool send(const QByteArray& msg) override {
         m_pending = msg;
@@ -192,7 +199,7 @@ public:
         }
 
         case MsgType::Topen: {
-            out = encodeRopen(tag, 2048);
+            out = encodeRopen(tag, 200);  // advertise small iounit to exercise drain loop
             break;
         }
 
@@ -213,16 +220,30 @@ public:
         case MsgType::Tread: {
             if (m_pending.size() < 23) { out.clear(); return false; }
             const auto* cur = b + 7;
-            uint32_t fid = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=4;
-            // skip offset[8] count[4]
-            cur += 8 + 4;
+            uint32_t fid   = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=4;
+            cur += 8; // skip offset[8]
+            uint32_t count = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=4;
+            (void)count;
             QString path = fidPath.value(fid, QString());
 
             QByteArray result;
             if (path == QStringLiteral("/ads1299evm/data")) {
-                // Return blocksizeSamples synthetic 27-byte records
-                for (int i = 0; i < blocksizeSamples; ++i) {
-                    result.append(makeSyntheticRecord(sampleCounter++));
+                // Build a new full block when the previous one has been drained.
+                if (dataBlock.isEmpty() || dataBlockPos >= dataBlock.size()) {
+                    dataBlock.clear();
+                    for (int i = 0; i < blocksizeSamples; ++i)
+                        dataBlock.append(makeSyntheticRecord(sampleCounter++));
+                    dataBlockPos = 0;
+                }
+                // Return at most kFakeChunkSize bytes — forces pollOnce to loop.
+                int avail = dataBlock.size() - dataBlockPos;
+                int take  = qMin(avail, kFakeChunkSize);
+                result    = dataBlock.mid(dataBlockPos, take);
+                dataBlockPos += take;
+                // Reset block once fully consumed so next poll gets fresh data.
+                if (dataBlockPos >= dataBlock.size()) {
+                    dataBlock.clear();
+                    dataBlockPos = 0;
                 }
             } else {
                 result = files.value(path);
