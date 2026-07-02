@@ -119,8 +119,16 @@ public:
     QStringList               acquireWrites;     // every payload written to acquire
     int                       blocksizeWords = 576;
     bool                      acquireStuck   = false; // simulate dead DRDY
+    bool                      dropConfWrites = false; // simulate RDATAC WREG lockout
+    int                       staleWordsPerBlock = 0; // stale DMA-pipeline words
     uint32_t                  advertisedIounit = 200; // Ropen iounit reply
     uint32_t                  maxDataTreadCount = 0;  // largest /data Tread seen
+
+    FakeMmb0Transport() {
+        // The chip answers its device ID whenever SPI register access is live
+        // (bringUp polls this before configuring).
+        files[QStringLiteral("/ads1299evm/conf/devid")] = QByteArrayLiteral("0x3E");
+    }
     int                       truncateCollectedBlockBytes = -1; // >=0 simulates short /data EOF
 
     bool send(const QByteArray& msg) override {
@@ -227,6 +235,10 @@ public:
                 } else {
                     files[path] = QByteArrayLiteral("0");
                 }
+            } else if (dropConfWrites
+                       && path.startsWith(QStringLiteral("/ads1299evm/conf/"))) {
+                // RDATAC lockout: the chip acknowledges the Twrite (the estyx
+                // server always does) but the WREG never reaches the register.
             } else if (!path.isEmpty()) {
                 files[path] = data;
             }
@@ -238,20 +250,24 @@ public:
             if (m_pending.size() < 23) { out.clear(); return false; }
             const auto* cur = b + 7;
             uint32_t fid   = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=4;
-            cur += 8; // offset
+            uint32_t offset = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=8;
             uint32_t count = uint32_t(cur[0])|(uint32_t(cur[1])<<8)|(uint32_t(cur[2])<<16)|(uint32_t(cur[3])<<24); cur+=4;
             const QString path = fidPath.value(fid, QString());
 
             QByteArray result;
             if (path == QStringLiteral("/ads1299evm/data")) {
+                // The firmware's data file pops from its queue and ignores
+                // the read offset (acquire_data_read discards pos).
                 maxDataTreadCount = qMax(maxDataTreadCount, count);
                 const int take = qMin<int>(int(count), dataQueue.size());
                 result = dataQueue.left(take);
                 dataQueue.remove(0, take);
             } else {
-                result = files.value(path);
-                if (int(count) < result.size())
-                    result.truncate(int(count));
+                // Regular estyx files honor the offset: reading past the end
+                // returns 0 bytes (EOF) — this is what terminates readPath's
+                // accumulation loop on the real device.
+                const QByteArray content = files.value(path);
+                result = content.mid(int(offset), int(count));
             }
             out = encodeRread(tag, result);
             break;
@@ -278,6 +294,21 @@ public:
 
 private:
     void collectOneBlock() {
+        // acquire_set(1) clears the firmware queue before collecting, but a
+        // word stuck in the McBSP pipeline survives and lands at the head of
+        // the block. Because the DMA moves EXACTLY blocksizeWords words, the
+        // shift is self-perpetuating: each block's own last word becomes the
+        // next block's stale head (observed live 2026-07-02).
+        dataQueue.clear();
+        if (staleWordsPerBlock > 0 && pipelineCarry.isEmpty() && sampleCounter == 0) {
+            // Aborted-session residue: plausible channel data, NOT a status.
+            for (int s = 0; s < staleWordsPerBlock; ++s)
+                appendWord(0x000141AAu);
+            pipelineCarry = dataQueue;
+            dataQueue.clear();
+        }
+        dataQueue = pipelineCarry;
+        pipelineCarry.clear();
         const int startSize = dataQueue.size();
         // One block = blocksizeWords 32-bit words = blocksizeWords/9 samples.
         const int samples = blocksizeWords / 9;
@@ -286,6 +317,13 @@ private:
             for (int c = 0; c < 8; ++c)
                 appendWord(uint32_t(sampleCounter * 8 + c) & 0xFFFFFFu);
             ++sampleCounter;
+        }
+        // The DMA delivers exactly blocksizeWords words; the excess tail
+        // stays in the pipeline and heads the next block.
+        const int blockBytes = blocksizeWords * 4;
+        if (dataQueue.size() > blockBytes) {
+            pipelineCarry = dataQueue.mid(blockBytes);
+            dataQueue.truncate(blockBytes);
         }
         if (truncateCollectedBlockBytes >= 0) {
             const int fullBlockBytes = dataQueue.size() - startSize;
@@ -305,6 +343,7 @@ private:
 
     QMap<uint32_t, QString> fidPath;   // fid -> resolved path
     QByteArray              dataQueue; // pending /data bytes (32-bit words)
+    QByteArray              pipelineCarry; // words stuck in the "McBSP" pipeline
     int                     sampleCounter = 0;
     QByteArray              m_pending;
 };
@@ -526,6 +565,152 @@ private slots:
         QVERIFY2(msg.contains(QStringLiteral("DRDY"), Qt::CaseInsensitive),
                  qPrintable(QStringLiteral("error should point at DRDY hardware: %1").arg(msg)));
         QVERIFY(!src->isRunning());
+
+        delete src;
+    }
+
+    // An aborted session leaves a stale word in the firmware's McBSP
+    // pipeline; the DMA moves exactly blocksize words per block, so every
+    // block arrives shifted and its own last word heads the next block
+    // (observed live 2026-07-02: frame.ch[0] read the STATUS value, ch[1]
+    // the real CH1). The source must drop the stale prefix ONCE and then
+    // treat consecutive blocks as a gapless stream — correct channel
+    // mapping with ZERO ongoing sample loss.
+    void realignsWhenQueueHasStalePrefix() {
+        auto* fake = new FakeMmb0Transport();
+        fake->staleWordsPerBlock = 1;
+
+        auto* src = new studio::mmb0::Mmb0DataSource(fake);
+        src->setBlocksizeSamples(4);
+
+        QSignalSpy frameSpy(src, &studio::IDataSource::framesReady);
+        QSignalSpy errorSpy(src, &studio::IDataSource::errorOccurred);
+
+        src->start();
+        QTest::qWait(150);
+        src->stop();
+
+        QVERIFY2(errorSpy.isEmpty(),
+                 qPrintable(errorSpy.isEmpty() ? QString()
+                                               : errorSpy.at(0).at(0).toString()));
+
+        int total = 0;
+        int prevSampleIndex = -1;
+        for (int i = 0; i < frameSpy.count(); ++i) {
+            const auto batch = frameSpy.at(i).at(0).value<studio::EegFrameBatch>();
+            for (const auto& f : batch) {
+                ++total;
+                // Correct channel mapping: ch[c] = k*8 + c per sample.
+                QCOMPARE(f.ch[0] % 8, 0);
+                for (int c = 1; c < 8; ++c)
+                    QCOMPARE(f.ch[c], f.ch[0] + c);
+                QCOMPARE(int(f.statP), 0);   // status parsed as status
+
+                // Zero data loss: the synthetic sample counter must be
+                // contiguous across every block boundary.
+                const int sampleIndex = f.ch[0] / 8;
+                if (prevSampleIndex >= 0)
+                    QCOMPARE(sampleIndex, prevSampleIndex + 1);
+                prevSampleIndex = sampleIndex;
+            }
+        }
+        QVERIFY2(total >= 8, qPrintable(QStringLiteral("only %1 frames").arg(total)));
+
+        delete src;
+    }
+
+    // A chip in residual RDATAC silently drops register writes (verified
+    // live 2026-07-02: a fast stop→start left every channel on its previous
+    // MUX). bringUp must read every register back and refuse to arm when a
+    // write did not land.
+    void bringUpFailsWhenRegisterWritesDropped() {
+        auto* fake = new FakeMmb0Transport();
+        fake->dropConfWrites = true;
+
+        auto* src = new studio::mmb0::Mmb0DataSource(fake);
+        src->setBlocksizeSamples(2);
+
+        QSignalSpy errorSpy(src, &studio::IDataSource::errorOccurred);
+
+        src->start();
+        QTest::qWait(100);
+
+        QVERIFY2(errorSpy.count() > 0, "expected read-back verification error");
+        const QString msg = errorSpy.at(0).at(0).toString();
+        QVERIFY2(msg.contains(QStringLiteral("did not accept")), qPrintable(msg));
+        QVERIFY(!src->isRunning());
+        QVERIFY2(fake->acquireWrites.isEmpty(),
+                 "acquire must not be armed when the config did not land");
+
+        delete src;
+    }
+
+    // While the chip is in RDATAC, register reads return conversion garbage —
+    // devid never reads a stable 0x3E. bringUp must gate on devid and refuse
+    // to configure a chip whose SPI register access is not live.
+    void bringUpFailsWhenDevidUnreadable() {
+        auto* fake = new FakeMmb0Transport();
+        fake->files[QStringLiteral("/ads1299evm/conf/devid")] =
+            QByteArrayLiteral("0xB3");   // RDATAC garbage signature
+        fake->dropConfWrites = true;     // keep the garbage devid in place
+        auto* src = new studio::mmb0::Mmb0DataSource(fake);
+        src->setBlocksizeSamples(2);
+        src->setAcquireTimeoutMs(100);   // also bounds the devid gate
+
+        QSignalSpy errorSpy(src, &studio::IDataSource::errorOccurred);
+
+        src->start();
+        QTest::qWait(600);
+
+        QVERIFY2(errorSpy.count() > 0, "expected devid gate error");
+        const QString msg = errorSpy.at(0).at(0).toString();
+        QVERIFY2(msg.contains(QStringLiteral("devid"), Qt::CaseInsensitive),
+                 qPrintable(msg));
+        QVERIFY(!src->isRunning());
+        QVERIFY2(fake->acquireWrites.isEmpty(),
+                 "acquire must not be armed when the chip is unreachable");
+
+        delete src;
+    }
+
+    // After a wedged (never-completed) block the firmware must NOT be
+    // re-armed: writing acquire=1 again trips ADS1299_readblock's XFERPROG
+    // early-return, which leaves the DSP's interrupts globally disabled and
+    // kills the USB stack until a power cycle. The next start() must detect
+    // acquire stuck at "1" during its drain step and refuse with a
+    // power-cycle error instead of arming.
+    void restartAfterWedgeRefusesToRearm() {
+        auto* fake = new FakeMmb0Transport();
+        fake->acquireStuck = true;
+
+        auto* src = new studio::mmb0::Mmb0DataSource(fake);
+        src->setBlocksizeSamples(2);
+        src->setAcquireTimeoutMs(100);
+
+        QSignalSpy errorSpy(src, &studio::IDataSource::errorOccurred);
+
+        src->start();
+        QTest::qWait(600);   // wedge detected; source self-stopped
+        QVERIFY(!src->isRunning());
+        const int errorsAfterWedge = errorSpy.count();
+        QVERIFY(errorsAfterWedge > 0);
+
+        // tearDown must have left acquire at "1" — the wedge evidence the
+        // next bringUp needs. Parking it to "0" would invite a fatal re-arm.
+        QCOMPARE(fake->acquireWrites.last(), QStringLiteral("1"));
+        const int armCount = fake->acquireWrites.count(QStringLiteral("1"));
+
+        // Restart: bringUp's drain sees the stuck "1" and refuses to arm.
+        src->start();
+        QTest::qWait(600);
+
+        QVERIFY(!src->isRunning());
+        QVERIFY2(errorSpy.count() > errorsAfterWedge,
+                 "expected a refusal error on restart");
+        const QString refusal = errorSpy.last().at(0).toString();
+        QVERIFY2(refusal.contains(QStringLiteral("power-cycle"), Qt::CaseInsensitive),
+                 qPrintable(refusal));
+        QCOMPARE(fake->acquireWrites.count(QStringLiteral("1")), armCount);
 
         delete src;
     }

@@ -95,7 +95,7 @@ private slots:
         for (int ch = 0; ch < 8; ++ch)
             cfg = cfg.withMux(ch, 5);    // MUX=101: internal test signal
         src.setConfig(cfg);
-        src.setBlocksizeSamples(30);
+        src.setBlocksizeSamples(64);   // 576 words — the fresh-flash-stable block size
 
         QSignalSpy frameSpy(&src, &studio::IDataSource::framesReady);
         QSignalSpy errorSpy(&src, &studio::IDataSource::errorOccurred);
@@ -152,7 +152,7 @@ private slots:
         }
 
         Mmb0DataSource src(transport);
-        src.setBlocksizeSamples(30);
+        src.setBlocksizeSamples(64);   // 576 words — the fresh-flash-stable block size
 
         // Phase 1 — all channels on the test signal.
         studio::DeviceConfig allTest = studio::DeviceConfig()

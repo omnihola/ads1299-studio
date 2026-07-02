@@ -42,6 +42,13 @@ public:
     // Clears the internal buffer and resets seq to 0.
     void reset();
 
+    // Discards a buffered partial sample (keeps seq) — used when the input
+    // stream lost alignment and the retained tail no longer continues it.
+    void dropPartialSample();
+
+    // Bytes of an incomplete sample currently buffered (0..35).
+    int bufferedBytes() const;
+
     // Next sequence number that will be assigned.
     uint32_t seq() const;
 

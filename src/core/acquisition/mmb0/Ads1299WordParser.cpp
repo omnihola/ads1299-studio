@@ -72,6 +72,16 @@ void Ads1299WordParser::reset()
     seq_ = 0;
 }
 
+void Ads1299WordParser::dropPartialSample()
+{
+    buf_.clear();
+}
+
+int Ads1299WordParser::bufferedBytes() const
+{
+    return buf_.size();
+}
+
 uint32_t Ads1299WordParser::seq() const
 {
     return seq_;

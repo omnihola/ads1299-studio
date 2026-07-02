@@ -25,6 +25,11 @@ public:
     uint32_t negotiatedMsize() const;
     QString  lastError() const;
 
+    // The fid established by attach() — callers that clunk the session's
+    // root (e.g. a throwaway probe connection) should use this rather than
+    // hardcoding the value.
+    uint32_t rootFid() const { return m_rootFid; }
+
     // High-level named-file ops
     // @p maxChunk (0 = unlimited) caps the count of each individual Tread —
     // needed for servers whose reply buffer is smaller than the negotiated

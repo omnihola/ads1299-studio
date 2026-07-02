@@ -62,10 +62,35 @@ private:
     /// Returns false and emits errorOccurred on any failure.
     bool bringUp();
 
+    /// bringUp step: wait for any in-flight one-shot block to settle
+    /// (acquire back to "0"). A stuck "1" means a dead block whose re-arm
+    /// would brick the firmware — refuses with a power-cycle error.
+    bool drainInFlightBlock();
+
+    /// bringUp step: poll /conf/devid until it reads 0x3E. While the chip is
+    /// still in RDATAC (until the firmware's block-complete ISR issues
+    /// SDATAC), register reads return garbage and writes are silently
+    /// ignored — devid is the "SPI register access is live" gate.
+    bool waitForSpiRegisterAccess();
+
+    /// bringUp step: write all modelled registers as hex text, then read
+    /// every one back and verify it landed (writes during residual RDATAC
+    /// are silently dropped by the chip; verification is the only proof).
+    bool writeAndVerifyRegisters();
+
     /// Write acquire="0" (best-effort) so the device is parked.
     void tearDown();
 
     void failAndStop(const QString& message);
+
+    /// Word offset (0..8) of the 9-word sample grid within a /data block,
+    /// located via the STATUS word signature; -1 when no alignment exists.
+    /// Non-zero when an aborted session left stale words in the firmware's
+    /// McBSP/DMA pipeline.
+    static int findSampleAlignment(const QByteArray& block);
+
+    /// True when every word at offsetWords + n*9 carries the STATUS signature.
+    static bool strideHasStatusSignature(const QByteArray& block, int offsetWords);
 
     // ── Register index → node name map ──────────────────────────────────────
     // Returns empty string for indices that are not modelled (skipped).
@@ -82,13 +107,17 @@ private:
     // sign-extended (status 0xFFC00000, channels 0x000141xx ≈ +82k codes,
     // matching the ±1.875 mV test signal at gain 24 within 2%).
     Ads1299WordParser           parser_{Ads1299WordParser::WordOrder::BigEndian};
-    // 32 samples = 288 words — the block size verified to sustain multi-block
-    // streaming on hardware (also divides the firmware's DMA frame math well).
-    int      blocksizeSamples_ = 32;    // EEG samples per block (x9 words on device)
+    // 64 samples = 576 words — the firmware's own default block size and the
+    // only value verified to stream stably on a FRESHLY flashed firmware
+    // (smaller blocks stalled within a few re-arms on a clean McBSP
+    // pipeline). Fewer re-arms per second also means fewer rolls of the
+    // firmware's fragile cross-block DMA dice; 256 ms/block at 250 SPS.
+    int      blocksizeSamples_ = 64;    // EEG samples per block (x9 words on device)
     int      acquireTimeoutMs_ = 4000;
     int      msWaitingForBlock_ = 0;    // elapsed since the last acquire="1"
     bool     running_          = false;
     bool     acquireWedged_    = false; // block never completed; do not re-arm
+    bool     alignmentLocked_  = false; // sample grid located for this session
     QTimer*  pollTimer_        = nullptr; // new QTimer(this) in ctor — migrates with moveToThread
 };
 
