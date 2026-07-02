@@ -25,8 +25,8 @@ public:
     FftProcessor(const FftProcessor&)            = delete;
     FftProcessor& operator=(const FftProcessor&) = delete;
 
-    /// Apply a Hann window to the input, run a real FFT, and return the
-    /// power (magnitude^2) for each of the nfft/2+1 frequency bins.
+    /// Remove the window mean, apply a Hann window, run a real FFT, and return
+    /// the power (magnitude^2) for each of the nfft/2+1 frequency bins.
     ///
     /// If @p samples.size() != nfft the data is zero-padded or truncated to
     /// exactly nfft points before processing.

@@ -89,11 +89,34 @@ void GlWaveformWidget::setChannelCount(int n)
 {
     channelCount_ = std::max(1, n);
     ensureBuffers();
+    ensureVisibleChannels();
     update();
 }
 
 void GlWaveformWidget::setChannelLabels(const QStringList& labels)
 {
+    channelLabels_ = labels;
+    update();
+}
+
+void GlWaveformWidget::setVisibleChannels(const QVector<int>& channels, const QStringList& labels)
+{
+    QVector<int> valid;
+    valid.reserve(channels.size());
+    for (int channel : channels) {
+        if (channel >= 0 && channel < channelCount_ && !valid.contains(channel)) {
+            valid.push_back(channel);
+        }
+    }
+
+    if (valid.isEmpty()) {
+        valid.reserve(channelCount_);
+        for (int c = 0; c < channelCount_; ++c) {
+            valid.push_back(c);
+        }
+    }
+
+    visibleChannels_ = valid;
     channelLabels_ = labels;
     update();
 }
@@ -269,10 +292,14 @@ void GlWaveformWidget::paintGL()
         static_cast<float>(sigColor.blueF()),
         1.0f);
 
+    ensureVisibleChannels();
+    const int displayLaneCount = std::max(1, static_cast<int>(visibleChannels_.size()));
+
     std::vector<float> pts;
-    for (int c = 0; c < channelCount_; ++c) {
+    for (int lane = 0; lane < displayLaneCount; ++lane) {
+        const int sourceChannel = visibleChannels_.at(lane);
         pts.clear();
-        buildNdcPoints(c, pts, maxPoints);
+        buildNdcPoints(sourceChannel, lane, displayLaneCount, pts, maxPoints);
         if (pts.size() < 4) {
             continue; // Need at least 2 vertices (each is x,y pair)
         }
@@ -309,7 +336,35 @@ void GlWaveformWidget::ensureBuffers()
     // the current global µV/div so the first auto-scale frame starts sensibly.
     if (autoScaleUv_.size() < n) {
         autoScaleUv_.resize(n, uvPerDiv_);
+    } else if (autoScaleUv_.size() > n) {
+        autoScaleUv_.resize(n);
     }
+}
+
+void GlWaveformWidget::ensureVisibleChannels()
+{
+    QVector<int> valid;
+    valid.reserve(visibleChannels_.isEmpty() ? channelCount_ : visibleChannels_.size());
+
+    if (visibleChannels_.isEmpty()) {
+        for (int c = 0; c < channelCount_; ++c) {
+            valid.push_back(c);
+        }
+    } else {
+        for (int channel : visibleChannels_) {
+            if (channel >= 0 && channel < channelCount_ && !valid.contains(channel)) {
+                valid.push_back(channel);
+            }
+        }
+    }
+
+    if (valid.isEmpty()) {
+        for (int c = 0; c < channelCount_; ++c) {
+            valid.push_back(c);
+        }
+    }
+
+    visibleChannels_ = valid;
 }
 
 int GlWaveformWidget::windowCapacity() const
@@ -318,14 +373,17 @@ int GlWaveformWidget::windowCapacity() const
     return std::min(std::max(cap, 2), kMaxCapacity);
 }
 
-void GlWaveformWidget::buildNdcPoints(int channel,
+void GlWaveformWidget::buildNdcPoints(int sourceChannel,
+                                      int displayLane,
+                                      int displayLaneCount,
                                       std::vector<float>& out,
                                       int maxPoints)
 {
-    if (channel < 0 || channel >= static_cast<int>(channelBufs_.size())) {
+    if (sourceChannel < 0 || sourceChannel >= static_cast<int>(channelBufs_.size())
+            || displayLane < 0 || displayLaneCount < 1 || displayLane >= displayLaneCount) {
         return;
     }
-    const auto& buf = channelBufs_[static_cast<size_t>(channel)];
+    const auto& buf = channelBufs_[static_cast<size_t>(sourceChannel)];
     const int   n   = static_cast<int>(buf.size());
     if (n < 1) {
         return;
@@ -365,8 +423,8 @@ void GlWaveformWidget::buildNdcPoints(int channel,
                     peak = absVal;
                 }
             }
-            autoScaleUv_[static_cast<size_t>(channel)] =
-                autoScaleStep(autoScaleUv_[static_cast<size_t>(channel)],
+            autoScaleUv_[static_cast<size_t>(sourceChannel)] =
+                autoScaleStep(autoScaleUv_[static_cast<size_t>(sourceChannel)],
                               peak,
                               /*floorUv=*/2.0,
                               /*fillFraction=*/0.85,
@@ -376,7 +434,7 @@ void GlWaveformWidget::buildNdcPoints(int channel,
         // Per-channel effective µV/div: autoScaleUv_ is the half-lane edge in µV.
         // microvoltsToNdcY uses uvPerDiv * divsPerHalfLane = fullScaleUv, so:
         //   effectiveUvPerDiv = autoScaleUv_[c] / divsPerHalfLane
-        effectiveUvPerDiv = autoScaleUv_[static_cast<size_t>(channel)] / kDivsPerHalfLane;
+        effectiveUvPerDiv = autoScaleUv_[static_cast<size_t>(sourceChannel)] / kDivsPerHalfLane;
     }
 
     out.reserve(static_cast<size_t>(kept) * 2);
@@ -394,8 +452,8 @@ void GlWaveformWidget::buildNdcPoints(int channel,
             continue; // older than the visible window
         }
         const float y = microvoltsToNdcY(ds.values[k],
-                                         channel,
-                                         channelCount_,
+                                         displayLane,
+                                         displayLaneCount,
                                          effectiveUvPerDiv,
                                          kDivsPerHalfLane);
         out.push_back(x);
@@ -407,15 +465,16 @@ void GlWaveformWidget::drawOverlay(int widgetWidth, int widgetHeight)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, false);
+    ensureVisibleChannels();
+    const int displayLaneCount = std::max(1, static_cast<int>(visibleChannels_.size()));
 
     // Faint horizontal grid lines at each lane boundary
     const QColor gridColor(theme::kBorder);
     QPen gridPen(gridColor, 1, Qt::DotLine);
     p.setPen(gridPen);
 
-    for (int c = 0; c <= channelCount_; ++c) {
-        // lane boundary at NDC y = 1 - 2*c/channelCount_
-        const float ndcY = 1.0f - 2.0f * static_cast<float>(c) / static_cast<float>(channelCount_);
+    for (int lane = 0; lane <= displayLaneCount; ++lane) {
+        const float ndcY = 1.0f - 2.0f * static_cast<float>(lane) / static_cast<float>(displayLaneCount);
         // NDC [-1,1] → widget pixels [0, widgetHeight]
         const int py = static_cast<int>((1.0f - ndcY) * 0.5f * static_cast<float>(widgetHeight));
         p.drawLine(0, py, widgetWidth, py);
@@ -427,17 +486,18 @@ void GlWaveformWidget::drawOverlay(int widgetWidth, int widgetHeight)
     const QFont  labelFont("monospace", 9);
     p.setFont(labelFont);
 
-    for (int c = 0; c < channelCount_; ++c) {
-        const float ndcY  = channelCenterNdcY(c, channelCount_);
+    for (int lane = 0; lane < displayLaneCount; ++lane) {
+        const int sourceChannel = visibleChannels_.at(lane);
+        const float ndcY  = channelCenterNdcY(lane, displayLaneCount);
         const int   py    = static_cast<int>((1.0f - ndcY) * 0.5f * static_cast<float>(widgetHeight));
-        const QString label = c < channelLabels_.size()
-                                  ? channelLabels_.at(c)
-                                  : QString("CH%1").arg(c + 1);
+        const QString label = lane < channelLabels_.size()
+                                  ? channelLabels_.at(lane)
+                                  : QString("CH%1").arg(sourceChannel + 1);
         p.drawText(4, py + 5, label);
 
         // When auto-scale is active, show a small ±<scale> µV readout per lane.
-        if (autoScale_ && static_cast<size_t>(c) < autoScaleUv_.size()) {
-            const double scaleUv = autoScaleUv_[static_cast<size_t>(c)];
+        if (autoScale_ && static_cast<size_t>(sourceChannel) < autoScaleUv_.size()) {
+            const double scaleUv = autoScaleUv_[static_cast<size_t>(sourceChannel)];
             const QString scaleText = QString("±%1µV").arg(static_cast<int>(scaleUv + 0.5));
             p.drawText(widgetWidth - 72, py + 5, scaleText);
         }

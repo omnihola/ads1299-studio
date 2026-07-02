@@ -18,6 +18,7 @@
 #include <QOpenGLBuffer>
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLShaderProgram>
+#include <QVector>
 #include <QStringList>
 #include <QTimer>
 
@@ -41,6 +42,7 @@ public:
     void setMicrovoltsPerDiv(double uv);    // vertical scale (default 200 µV/div)
     void setAutoScale(bool on);             // per-channel auto-scale (fast-attack/slow-release)
     void setChannelLabels(const QStringList& labels);
+    void setVisibleChannels(const QVector<int>& channels, const QStringList& labels);
 
     // ---- Data feed -----------------------------------------------------------
     // Append a block of samples.  perChannelSamples[c] contains the new µV values
@@ -72,6 +74,7 @@ private:
     double sampleRate_  = 250.0;
     double windowSec_   = 5.0;
     double uvPerDiv_    = 200.0;
+    QVector<int> visibleChannels_;
     QStringList channelLabels_;
 
     // Per-channel auto-scale envelope (µV at the lane edge)
@@ -88,8 +91,10 @@ private:
 
     // Helpers
     void ensureBuffers();
+    void ensureVisibleChannels();
     int  windowCapacity() const;            // sampleRate_ * windowSec_, capped
-    void buildNdcPoints(int channel, std::vector<float>& out, int maxPoints);
+    void buildNdcPoints(int sourceChannel, int displayLane, int displayLaneCount,
+                        std::vector<float>& out, int maxPoints);
     void drawOverlay(int widgetWidth, int widgetHeight);
 };
 

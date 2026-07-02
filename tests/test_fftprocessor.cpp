@@ -22,6 +22,9 @@ private slots:
 
     // Feed a pure 10 Hz sine at fs=256, nfft=256; peak bin must be ~10 Hz
     void peakBinMatchesTone();
+
+    // A pure DC electrode offset should be removed before the Hann window.
+    void constantOffsetDoesNotCreateDcPeak();
 };
 
 void TestFftProcessor::numBinsCorrect()
@@ -67,6 +70,22 @@ void TestFftProcessor::peakBinMatchesTone()
     QVERIFY2(std::abs(peakFreq - toneHz) <= 1.5,
              qPrintable(QString("Expected ~%1 Hz, got %2 Hz (bin %3)")
                             .arg(toneHz).arg(peakFreq).arg(peakBin)));
+}
+
+void TestFftProcessor::constantOffsetDoesNotCreateDcPeak()
+{
+    const int nfft = 256;
+    std::vector<double> samples(static_cast<size_t>(nfft), 100000.0);
+
+    studio::FftProcessor proc(nfft);
+    const auto power = proc.powerSpectrum(samples);
+
+    QCOMPARE(static_cast<int>(power.size()), proc.numBins());
+    for (double binPower : power) {
+        QVERIFY2(binPower < 1e-6,
+                 qPrintable(QString("Expected detrended DC-only input near zero power, got %1")
+                                .arg(binPower)));
+    }
 }
 
 QTEST_GUILESS_MAIN(TestFftProcessor)

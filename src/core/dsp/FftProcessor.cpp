@@ -49,13 +49,25 @@ FftProcessor::~FftProcessor()
 
 std::vector<double> FftProcessor::powerSpectrum(const std::vector<double>& samples) const
 {
-    // Copy/pad/truncate input to exactly nfft_ floats, applying the Hann window.
+    // Remove the per-window DC offset before applying the Hann window. EEG front
+    // ends can carry large electrode offsets; windowing the raw offset leaks a
+    // huge low-frequency skirt into the live spectrum.
     std::vector<float> windowed(static_cast<size_t>(nfft_), 0.0f);
     const int copyLen = static_cast<int>(
         std::min(samples.size(), static_cast<size_t>(nfft_)));
+
+    double mean = 0.0;
+    for (int n = 0; n < copyLen; ++n) {
+        mean += samples[static_cast<size_t>(n)];
+    }
+    if (copyLen > 0) {
+        mean /= static_cast<double>(copyLen);
+    }
+
+    // Copy/pad/truncate input to exactly nfft_ floats, applying the Hann window.
     for (int n = 0; n < copyLen; ++n) {
         windowed[static_cast<size_t>(n)] =
-            static_cast<float>(samples[static_cast<size_t>(n)]) *
+            static_cast<float>(samples[static_cast<size_t>(n)] - mean) *
             window_[static_cast<size_t>(n)];
     }
 

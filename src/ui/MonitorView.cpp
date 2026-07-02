@@ -107,25 +107,21 @@ void MonitorView::onRenderTick()
     EegFrame frame;
     bool gotAny = false;
 
-    const QVector<int> visible = visibleChannels();
-    if (visible.isEmpty()) {
-        return;
-    }
-
-    // Accumulate samples across all popped frames into visible per-channel blocks.
-    std::vector<std::vector<float>> block(static_cast<size_t>(visible.size()));
+    // Accumulate samples across all popped frames into physical per-channel blocks.
+    // Visibility is handled by GlWaveformWidget, so CH1 always stays frame.ch[0],
+    // CH2 always stays frame.ch[1], and toggling display channels never remaps data.
+    std::vector<std::vector<float>> block(static_cast<size_t>(kNumChannels));
 
     while (controller_->displayBuffer().pop(frame)) {
         gotAny = true;
-        for (int lane = 0; lane < visible.size(); ++lane) {
-            const int c = visible.at(lane);
+        for (int c = 0; c < kNumChannels; ++c) {
             // Use per-channel configured gain so µV scale is correct.
             ScaleConverter converter(gains_[c]);
             const double uv = converter.countsToMicrovolts(frame.ch[c]);
             // Apply display-only filter chain (notch/bandpass if configured).
             // The raw frame is NOT modified — recording path is entirely unaffected.
             const double displayUv = filterChain_.process(c, uv);
-            block[static_cast<size_t>(lane)].push_back(static_cast<float>(displayUv));
+            block[static_cast<size_t>(c)].push_back(static_cast<float>(displayUv));
         }
     }
 
@@ -274,7 +270,7 @@ void MonitorView::buildLayout()
     // ---- GL waveform plot ----------------------------------------------
     glPlot_ = new studio::gl::GlWaveformWidget(this);
     glPlot_->setChannelCount(kNumChannels);
-    glPlot_->setChannelLabels(visibleChannelLabels());
+    glPlot_->setVisibleChannels(visibleChannels(), visibleChannelLabels());
     glPlot_->setSampleRate(static_cast<double>(sampleRateHz_));
     glPlot_->setWindowSeconds(5.0);
     glPlot_->setMicrovoltsPerDiv(uvPerDiv_);
@@ -308,12 +304,8 @@ void MonitorView::onChannelSelectionChanged()
     }
 
     if (glPlot_) {
-        const int visibleCount = std::max(1, static_cast<int>(visibleChannels().size()));
-        glPlot_->setChannelCount(visibleCount);
-        glPlot_->setChannelLabels(visibleChannelLabels());
-        glPlot_->clearData();
+        glPlot_->setVisibleChannels(visibleChannels(), visibleChannelLabels());
     }
-    filterChain_.reset();
 }
 
 QVector<int> MonitorView::visibleChannels() const

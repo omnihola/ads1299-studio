@@ -14,6 +14,7 @@
 
 #include "app/SessionController.h"
 #include "core/dsp/FftProcessor.h"
+#include "core/dsp/ScaleConverter.h"
 #include "ui/theme/Theme.h"
 
 namespace studio {
@@ -113,7 +114,11 @@ void SpectrumView::onTimer()
 {
     if (!controller_) return;
 
-    const int channel = channelBox_->currentIndex();  // 0-based
+    const int channel = channelBox_->currentIndex();  // 0-based physical channel
+    if (channel < 0 || channel >= 8) {
+        return;
+    }
+
     const QVector<double> samples =
         controller_->recentSamples(channel, kNfft);
 
@@ -122,8 +127,15 @@ void SpectrumView::onTimer()
         return;
     }
 
-    // Convert QVector<double> → std::vector<double>
-    std::vector<double> buf(samples.begin(), samples.end());
+    const DeviceConfig cfg = controller_->config();
+    const auto gainArr = cfg.gain();
+    ScaleConverter converter(gainArr[static_cast<size_t>(channel)]);
+
+    std::vector<double> buf;
+    buf.reserve(static_cast<size_t>(samples.size()));
+    for (double sample : samples) {
+        buf.push_back(converter.countsToMicrovolts(static_cast<int32_t>(sample)));
+    }
 
     const std::vector<double> power = fft_->powerSpectrum(buf);
 
@@ -144,7 +156,7 @@ void SpectrumView::onTimer()
     }
 
     // Update x-axis label depending on mode
-    plot_->yAxis->setLabel(logScale ? "Power (dB)" : "Power");
+    plot_->yAxis->setLabel(logScale ? "Power (dB µV²)" : "Power (µV²)");
 
     plot_->graph(0)->setData(xData, yData);
     plot_->xAxis->setRange(0.0, fs / 2.0);
