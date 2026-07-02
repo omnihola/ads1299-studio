@@ -27,5 +27,7 @@
 
 # RE reference (TI source kept locally for interop; review licensing before publishing)
 
-# TI reverse-engineering reference (kept local only; do not commit upstream GPL/CPL source)
-/reference/ti-mmb0/
+# TI reverse-engineering reference + PDK firmware source mirror (kept local
+# only; do not commit upstream GPL/CPL source). The firmware fixes derived
+# from this tree live as a portable patch under firmware-patches/ instead.
+/reference/

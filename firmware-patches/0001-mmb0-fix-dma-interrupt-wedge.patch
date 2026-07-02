@@ -1,0 +1,82 @@
+diff --git a/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ADCProLib/src/acquire.cpp b/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ADCProLib/src/acquire.cpp
+index a90f39d..cd8a324 100644
+--- a/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ADCProLib/src/acquire.cpp
++++ b/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ADCProLib/src/acquire.cpp
+@@ -60,7 +60,24 @@ extern "C" void acquire_next_block(void)
+             acquiring=0;
+             return;
+         }
+-        (void)dc_readblock(hAdsDeviceHandle, (void*)(buf), acquire_blocksize, acquire_adc_done);
++        /* BUGFIX (stuck-acquire): check dc_readblock's status. It returns
++         * non-zero (TIDC_ERR_XFERPROG, etc.) when the converter driver
++         * could not start the transfer — in which case acquire_adc_done()
++         * never fires, the block never completes, and `acquiring` stays 1
++         * forever (the host then sees /ads1299evm/acquire never return to
++         * 0 and times out). On failure, stop acquiring and roll back the
++         * queue write so the host gets a definitive result instead of a
++         * hang. 0 == TIDC_NO_ERR. */
++        if (dc_readblock(hAdsDeviceHandle, (void*)(buf), acquire_blocksize,
++                         acquire_adc_done) != 0) {
++            /* Cancel the reserved (never-filled) write transaction — per
++             * BlockQueue, startWrite(0) cancels it. finishWrite() must NOT
++             * be used here: it would commit the uninitialized block to the
++             * read side. */
++            long cancel = 0;
++            (void)adcq.startWrite(cancel);
++            acquiring=0;
++        }
+     }
+ }
+ 
+diff --git a/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ads1299evm/t1299_ob.c b/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ads1299evm/t1299_ob.c
+index 49b759c..94dbc71 100644
+--- a/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ads1299evm/t1299_ob.c
++++ b/ADS1299EEGFEFirmware/ADS1299FW/dev/build/adcpro/ads1299evm/t1299_ob.c
+@@ -601,10 +601,29 @@ TTIDCSTATUS ADS1299_readblock(void *pDC,
+     (void)IRQ_globalDisable();
+ 
+     /* set tranfer in progress flag                             */
+-    if (pADS->iXferInProgress == 1)
++    if (pADS->iXferInProgress == 1) {
++        /* BUGFIX (interrupt-wedge): re-enable global interrupts before
++         * bailing out. The original dropped straight to `return` with
++         * interrupts still globally disabled by IRQ_globalDisable()
++         * above, permanently killing ALL DSP interrupt handling —
++         * including the USB stack — until a power cycle. This early
++         * return fires whenever the host re-arms acquire while a prior
++         * block's completion ISR has not yet cleared iXferInProgress,
++         * which is exactly the fresh-flash / fast-restart race. */
++        (void)IRQ_globalEnable();
+         return TIDC_ERR_XFERPROG;
+-    else
+-        pADS->iXferInProgress = 1;
++    }
++    pADS->iXferInProgress = 1;
++
++    /* BUGFIX (first-frame priming): reset the first-frame flag at the
++     * start of EVERY block. The global `a` latched to 1 after the first
++     * frame of the very first block and was never cleared, so from the
++     * second block onward drdyIsr/SubmitBlock took the "not first frame"
++     * path and programmed the transmit-DMA element count one short — the
++     * block then never accumulated its full sample count and acquire
++     * stuck at 1. Each block is an independent DMA setup, so its first
++     * frame must prime the McBSP again. */
++    a = 0;
+ 
+     /* set the global data converter object pointer             */
+     pgADS = pADS;
+@@ -642,6 +661,14 @@ TTIDCSTATUS ADS1299_readblock(void *pDC,
+         (void)SetSclkCmdMode(pADS->serial, ADS1299_CMDMODE_ON);
+         (void)ADS1299_control(pADS,ADS1299_CMD_SDATAC, 0);
+         (void)ADS1299_control(pADS,ADS1299_CMD_STOP, 0);
++        /* BUGFIX (interrupt-wedge): restore the scheduler/interrupt state
++         * disabled on the way in (HWI_disable + TSK_disable just above,
++         * IRQ_globalDisable at entry) before returning. The original
++         * bailed out with HWI, TSK and global interrupts all still
++         * disabled, wedging the DSP exactly like the XFERPROG path did. */
++        TSK_enable();
++        HWI_enable();
++        (void)IRQ_globalEnable();
+         return iStatus;
+     }
+ 
