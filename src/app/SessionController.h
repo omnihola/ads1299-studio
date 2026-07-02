@@ -124,6 +124,7 @@ private slots:
 
 private:
     void setState(State s);
+    void queueSourceConfigSync(const DeviceConfig& cfg);
 
     // connectMmb0 helper: firmware-upload path for a cold-booted board
     // (0451:9001 → upload ads1299evm-pdk.bin → re-enumerate as 0451:5718).

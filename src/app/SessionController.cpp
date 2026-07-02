@@ -160,14 +160,22 @@ void SessionController::applyConfig(const DeviceConfig& cfg)
     Logger::instance().log("info", "SessionController.applyConfig",
                            QJsonObject{{"sampleRate", cfg.sampleRate()}});
 
-    // Forward sample rate to the source on the worker thread (non-blocking).
-    QMetaObject::invokeMethod(source_,
-        [this, sps = cfg.sampleRate()]() {
-            source_->setSampleRate(sps);
-        },
-        Qt::QueuedConnection);
+    queueSourceConfigSync(cfg);
 
     emit configChanged(cfg);
+}
+
+void SessionController::queueSourceConfigSync(const DeviceConfig& cfg)
+{
+    QMetaObject::invokeMethod(source_,
+        [source = source_, cfg]() {
+            if (auto* mmb0 = qobject_cast<studio::mmb0::Mmb0DataSource*>(source)) {
+                mmb0->setConfig(cfg);
+                return;
+            }
+            source->setSampleRate(cfg.sampleRate());
+        },
+        Qt::QueuedConnection);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,14 +198,9 @@ void SessionController::startStreaming()
 
     workerThread_.start();
 
-    // Sync the source's sample rate to the configured rate before starting.
-    // This ensures the source matches config_ at stream startup, preventing the
-    // divergence where applyConfig hasn't been called by the user yet.
-    QMetaObject::invokeMethod(source_,
-        [this, sps = config_.sampleRate()]() {
-            source_->setSampleRate(sps);
-        },
-        Qt::QueuedConnection);
+    // Sync the source's full device config before starting. This matters for the
+    // MMB0 backend: SRB1, BIAS and CH mux/gain are written during bringUp().
+    queueSourceConfigSync(config_);
 
     // Start the source on the worker thread via a queued invocation.
     QMetaObject::invokeMethod(source_, &IDataSource::start, Qt::QueuedConnection);
