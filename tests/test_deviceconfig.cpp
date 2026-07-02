@@ -22,6 +22,18 @@ private slots:
         QCOMPARE(rt.biasEnabled(), d.biasEnabled());
     }
 
+    // The default bench wiring uses CHx plus REF_ELEC, which requires SRB1 to
+    // route the common reference to channel negative inputs.
+    void defaultEnablesSrb1CommonReference()
+    {
+        DeviceConfig d;
+        QVERIFY(d.srb1());
+
+        const auto bytes = d.toRegisterBytes();
+        // MISC1 is at index 20 (register address 0x15); bit 5 enables SRB1.
+        QCOMPARE(bytes[20], static_cast<uint8_t>(0x20));
+    }
+
     // Internal test signal (ADS1299 datasheet + verified on hardware):
     // CONFIG2 = 0xD0 (INT_CAL=1) enables the on-chip ±1.875 mV square wave;
     // the default 0xC0 leaves it off. Round-trips through register bytes.

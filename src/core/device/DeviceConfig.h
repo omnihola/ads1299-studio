@@ -10,7 +10,7 @@ namespace studio {
 /// Immutable high-level configuration of an ADS1299 device.
 ///
 /// Defaults: 500 SPS, all channels gain=24 mux=0 (normal electrode),
-/// srb1=false, biasEnabled=true.
+/// srb1=true for common REF_ELEC wiring, biasEnabled=true.
 ///
 /// with* methods return a new copy with the requested field changed;
 /// the original is never modified (immutable value-object pattern).

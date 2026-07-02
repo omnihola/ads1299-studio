@@ -13,7 +13,7 @@ namespace studio {
 
 DeviceConfig::DeviceConfig()
     : m_sampleRate(500)
-    , m_srb1(false)
+    , m_srb1(true)
     , m_biasEnabled(true)
 {
     m_gain.fill(24);
