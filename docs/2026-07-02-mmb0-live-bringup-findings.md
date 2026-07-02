@@ -63,6 +63,68 @@ on the board (ADS1299EEGFE-PDK, firmware `ads1299evm-pdk.bin` 0.0.27).
   Raising the per-block sample count toward 56 (one max-size Tread) improves
   the duty cycle; gap-free capture would need firmware changes.
 
+## Session-lifecycle landmines (second live session, same day)
+
+All four were reproduced on hardware and are now guarded in `Mmb0DataSource`:
+
+1. **RDATAC register lockout on restart.** `acquire=0` only clears a firmware
+   flag; the chip stays in RDATAC until the in-flight block's ISR issues
+   STOP+SDATAC. Register WRITES during that window are silently dropped (a
+   fast stop→start left every channel on its previous MUX) and reads return
+   conversion garbage. Guards: poll `/conf/devid` until it reads 0x3E before
+   configuring (`waitForSpiRegisterAccess`), then **read every written
+   register back** and refuse to arm on any mismatch
+   (`writeAndVerifyRegisters`).
+2. **XFERPROG wedge.** `ADS1299_readblock()` disables global interrupts on
+   entry and, when the previous block's `iXferInProgress` was never cleared,
+   early-returns WITHOUT re-enabling them — the DSP's USB stack dies until a
+   power cycle (even bulk OUT times out). Guards: after an acquire timeout,
+   leave `acquire` at "1" as evidence (`acquireWedged_`); the next bringUp's
+   drain step sees the stuck "1" and refuses to re-arm with a power-cycle
+   error (`drainInFlightBlock`).
+3. **Stale-word queue shift.** A session aborted mid-block can leave one
+   word in the McBSP/DMA pipeline that lands at the head of the next block,
+   shifting the 9-word grid (ch[0] read the STATUS value, ch[1] the real
+   CH1). Guard: locate the true alignment via the STATUS signature
+   (big-endian `FF Cx xx xx` at every 9-word stride) and drop the stale
+   prefix (`findSampleAlignment`), sacrificing at most one sample per block.
+4. **Unpadded hex read-back.** The firmware prints u32 files as `0x%X`
+   ("0x0", not "0x00") — all read-back comparisons must be numeric, never
+   string equality.
+
+Channel mapping verified live by rotating the test signal through chip
+CH1→CH2→CH3 (others shorted): the ±82k square wave follows `frame.ch[0..2]`
+exactly, and MonitorView lane "CHn" draws `frame.ch[n-1]` — GUI channels map
+one-to-one to ADS1299 channels. Shorted-channel offsets measured −0.4k…−1.2k
+codes (−9…−27 µV) with ~40-code noise spans (≈0.9 µVpp, at the datasheet's
+1 µVpp channel-noise spec).
+
+## Fresh-flash first-session stall (unresolved firmware defect)
+
+The first streaming session after a firmware flash stalls randomly within
+2–6 block re-arms (observed with 270-, 288- and 576-word blocks; quieting
+the USB bus during collection did not help). The stall is a lost DMA
+completion in the firmware's fragile cross-block bookkeeping (the global
+priming flag `a` in t1299_ob.c is never reset per block; the XFERPROG
+early-return leaks a global interrupt disable). Once ANY session survives
+and later sessions stop mid-block, the McBSP pipeline holds a residue word
+that makes every subsequent block self-priming — sessions in that state ran
+480-frame and 3-channel-rotation suites repeatedly with zero stalls (the
+one-word shift is compensated losslessly by the host's alignment lock).
+
+**Operational recipe:** cold-boot (unplug BOTH the 6 V barrel AND USB; power
+first, USB second on reconnect) → connect → Start. If "block never
+completed" appears, cold-boot and retry — usually 1–3 attempts. Once
+streaming, the session and all later ones are stable. Replugging USB alone
+never recovers a wedge: the DSP keeps running on the external supply.
+
+**Root fix (future work):** rebuild the firmware — full source is in
+`reference/ti-mmb0/` and `~/Documents/ads1292-studio/mmb0/fw_src/`. Known
+bugs to fix: (1) `acquire_next_block()` ignores `dc_readblock`'s return;
+(2) `ADS1299_readblock()` XFERPROG early-return leaves `IRQ_globalDisable`
+in effect; (3) per-block DMA priming relies on the never-reset global `a`.
+Needs the TI C55x code-generation tools.
+
 ## Debug workflow notes
 
 - Reference C tools live in `~/Documents/ads1292-studio/mmb0/` (probe,
