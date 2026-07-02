@@ -171,7 +171,7 @@ void Mmb0DataSource::pollOnce() {
             // this state bricks the USB stack until a power cycle.
             acquireWedged_ = true;
             failAndStop(QStringLiteral(
-                "Acquisition block never completed (acquire stuck at 1). "
+                "Acquisition block never completed (acquire stuck at 1; DRDY did not finish the block). "
                 "If this repeats, power-cycle the board; also check the "
                 "ADS1299EEGFE front-end seating and CLKSEL jumpers."));
         }
@@ -184,6 +184,12 @@ void Mmb0DataSource::pollOnce() {
     QByteArray block;
     if (!client_->readPath(kDataPath, block, blockBytes, kMaxDataChunkBytes)) {
         failAndStop(QStringLiteral("Read from /data failed: ") + client_->lastError());
+        return;
+    }
+    if (block.size() != blockBytes) {
+        failAndStop(QStringLiteral("Short /data block: expected %1 bytes, got %2 bytes")
+                        .arg(blockBytes)
+                        .arg(block.size()));
         return;
     }
 

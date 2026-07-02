@@ -96,6 +96,7 @@ public:
     QMap<QString, QByteArray> files;
     QMap<uint32_t, QString>   fidPath;
     bool errorOnWalk = false;   // when true, Twalk always returns Rerror
+    int forcedWriteCount = -1;  // >=0 forces Rwrite.count for short-write tests
 
     bool send(const QByteArray& msg) override {
         m_pending = msg;
@@ -190,7 +191,10 @@ public:
             QString path = fidPath.value(fid, QString());
             if (!path.isEmpty())
                 files[path] = data;
-            out = encodeRwrite(tag, count);
+            const uint32_t replyCount = forcedWriteCount >= 0
+                                            ? static_cast<uint32_t>(forcedWriteCount)
+                                            : count;
+            out = encodeRwrite(tag, replyCount);
             break;
         }
 
@@ -298,6 +302,21 @@ private slots:
                                        QByteArray(1, 0x42));
         QVERIFY(!result);
         QVERIFY(!client.lastError().isEmpty());
+    }
+
+    void shortWriteFails() {
+        MockStyxServer mock;
+        mock.forcedWriteCount = 1;
+
+        studio::styx::Styx9pClient client(&mock, 100);
+        QVERIFY(client.connectSession());
+        QVERIFY(client.attach());
+
+        const bool result = client.writePath(QStringLiteral("/ads1299evm/conf/config1"),
+                                             QByteArrayLiteral("0x96"));
+        QVERIFY(!result);
+        QVERIFY2(client.lastError().contains(QStringLiteral("short write")),
+                 qPrintable(client.lastError()));
     }
 };
 

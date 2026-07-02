@@ -121,6 +121,7 @@ public:
     bool                      acquireStuck   = false; // simulate dead DRDY
     uint32_t                  advertisedIounit = 200; // Ropen iounit reply
     uint32_t                  maxDataTreadCount = 0;  // largest /data Tread seen
+    int                       truncateCollectedBlockBytes = -1; // >=0 simulates short /data EOF
 
     bool send(const QByteArray& msg) override {
         m_pending = msg;
@@ -277,6 +278,7 @@ public:
 
 private:
     void collectOneBlock() {
+        const int startSize = dataQueue.size();
         // One block = blocksizeWords 32-bit words = blocksizeWords/9 samples.
         const int samples = blocksizeWords / 9;
         for (int s = 0; s < samples; ++s) {
@@ -284,6 +286,11 @@ private:
             for (int c = 0; c < 8; ++c)
                 appendWord(uint32_t(sampleCounter * 8 + c) & 0xFFFFFFu);
             ++sampleCounter;
+        }
+        if (truncateCollectedBlockBytes >= 0) {
+            const int fullBlockBytes = dataQueue.size() - startSize;
+            const int keep = qBound(0, truncateCollectedBlockBytes, fullBlockBytes);
+            dataQueue.resize(startSize + keep);
         }
     }
     // Big-endian, 24-bit value sign-extended to 32 bits (verified layout).
@@ -518,6 +525,33 @@ private slots:
         const QString msg = errorSpy.at(0).at(0).toString();
         QVERIFY2(msg.contains(QStringLiteral("DRDY"), Qt::CaseInsensitive),
                  qPrintable(QStringLiteral("error should point at DRDY hardware: %1").arg(msg)));
+        QVERIFY(!src->isRunning());
+
+        delete src;
+    }
+
+    // A completed acquire must produce exactly one full block. A short but
+    // sample-aligned /data read is still data loss; parsing it would make seq
+    // numbers look contiguous and hide the missing samples from downstream
+    // integrity checks.
+    void shortDataBlockEmitsErrorWithoutFrames() {
+        auto* fake = new FakeMmb0Transport();
+        fake->truncateCollectedBlockBytes = 36; // one sample from a 2-sample block
+
+        auto* src = new studio::mmb0::Mmb0DataSource(fake);
+        src->setBlocksizeSamples(2);
+
+        QSignalSpy frameSpy(src, &studio::IDataSource::framesReady);
+        QSignalSpy errorSpy(src, &studio::IDataSource::errorOccurred);
+
+        src->start();
+        QTest::qWait(200);
+
+        QVERIFY2(errorSpy.count() > 0, "expected short /data block error");
+        const QString msg = errorSpy.at(0).at(0).toString();
+        QVERIFY2(msg.contains(QStringLiteral("Short /data block")),
+                 qPrintable(msg));
+        QCOMPARE(frameSpy.count(), 0);
         QVERIFY(!src->isRunning());
 
         delete src;

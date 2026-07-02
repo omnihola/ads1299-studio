@@ -180,6 +180,14 @@ bool Styx9pClient::writePath(const QString& path, const QByteArray& data)
         clunk(fid); // best-effort
         return false;
     }
+    if (written != static_cast<uint32_t>(data.size())) {
+        m_lastError = QStringLiteral("short write to %1 (%2/%3 bytes)")
+                          .arg(path)
+                          .arg(written)
+                          .arg(data.size());
+        clunk(fid); // best-effort
+        return false;
+    }
 
     return clunk(fid);
 }

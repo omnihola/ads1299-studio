@@ -4,12 +4,25 @@
 #include "core/acquisition/mmb0/Mmb0Bootloader.h"
 #include "core/acquisition/mmb0/Mmb0DataSource.h"
 #include "core/acquisition/mmb0/Mmb0UsbTransport.h"
+#include "core/acquisition/mmb0/Styx9pClient.h"
 #include "core/logging/Logger.h"
 
 #include <QJsonObject>
 #include <QMetaType>
 
 namespace studio {
+
+static QString addMmb0RecoveryHint(const QString& message)
+{
+    if (message.contains(QStringLiteral("bulk OUT failed"))
+        && message.contains(QStringLiteral("LIBUSB_ERROR_TIMEOUT"))) {
+        return message + QStringLiteral(
+            " (USBStyx is enumerated, but its bulk OUT endpoint is not accepting "
+            "requests. Close other clients, replug the MMB0 USB connection, or "
+            "reload the MMB0 firmware.)");
+    }
+    return message;
+}
 
 // ---------------------------------------------------------------------------
 // Construction / destruction
@@ -335,9 +348,70 @@ bool SessionController::ensureMmb0StyxMode(QString* errorOut)
     return true;
 }
 
+bool SessionController::probeMmb0StyxLink(QString* errorOut)
+{
+    auto fail = [&](const QString& msg, const char* event) {
+        const QString hinted = addMmb0RecoveryHint(msg);
+        Logger::instance().log("warn", event, QJsonObject{{"error", hinted}});
+        if (errorOut) *errorOut = hinted;
+        return false;
+    };
+
+    studio::mmb0::Mmb0UsbTransport probeTransport;
+    if (!probeTransport.open()) {
+        return fail(QStringLiteral("MMB0 probe open failed: %1")
+                        .arg(probeTransport.lastError()),
+                    "SessionController.connectMmb0.probeOpenFailed");
+    }
+
+    studio::styx::Styx9pClient client(&probeTransport, 3000);
+    if (!client.attach(QStringLiteral("nobody"), QStringLiteral("nobody"))) {
+        return fail(QStringLiteral("MMB0 probe attach failed: %1")
+                        .arg(client.lastError()),
+                    "SessionController.connectMmb0.probeAttachFailed");
+    }
+
+    QByteArray version;
+    if (!client.readPath(QStringLiteral("/version"), version, 64)) {
+        const QString err = client.lastError();
+        client.clunk(1); // best-effort: release the root fid before reconnecting
+        return fail(QStringLiteral("MMB0 probe read /version failed: %1")
+                        .arg(err),
+                    "SessionController.connectMmb0.probeVersionFailed");
+    }
+
+    QByteArray devid;
+    if (!client.readPath(QStringLiteral("/ads1299evm/conf/devid"), devid, 64)) {
+        const QString err = client.lastError();
+        client.clunk(1); // best-effort
+        return fail(QStringLiteral("MMB0 probe read ADS1299 devid failed: %1")
+                        .arg(err),
+                    "SessionController.connectMmb0.probeDevidFailed");
+    }
+
+    const QString trimmedDevid = QString::fromLatin1(devid.trimmed());
+    if (trimmedDevid != QStringLiteral("0x3E")) {
+        client.clunk(1); // best-effort
+        return fail(QStringLiteral("MMB0 probe found unexpected ADS1299 devid %1")
+                        .arg(trimmedDevid.isEmpty()
+                                 ? QStringLiteral("<empty>")
+                                 : trimmedDevid),
+                    "SessionController.connectMmb0.probeUnexpectedDevid");
+    }
+
+    client.clunk(1); // best-effort: source bringUp attaches a fresh root fid
+    Logger::instance().log("info", "SessionController.connectMmb0.probeOk",
+                           QJsonObject{{"version", QString::fromLatin1(version.trimmed())},
+                                       {"devid", trimmedDevid}});
+    return true;
+}
+
 bool SessionController::connectMmb0(QString* errorOut)
 {
     if (!ensureMmb0StyxMode(errorOut))
+        return false;
+
+    if (!probeMmb0StyxLink(errorOut))
         return false;
 
     auto* t = new studio::mmb0::Mmb0UsbTransport();

@@ -28,6 +28,9 @@ private slots:
     // this doubles as the live validation of Mmb0Bootloader::uploadFirmware.
     void initTestCase()
     {
+        if (qEnvironmentVariable("ADS1299_RUN_LIVE_TESTS") != QStringLiteral("1"))
+            QSKIP("Live MMB0 tests are opt-in; set ADS1299_RUN_LIVE_TESTS=1");
+
         if (Mmb0Bootloader::isStyxPresent() || !Mmb0Bootloader::isBootloaderPresent())
             return;
 
@@ -129,13 +132,13 @@ private slots:
 
     // Channel-mapping proof, run through the GUI's real stop→reconfigure→
     // start flow in ONE session: first stream with all channels on the test
-    // signal, then stop, re-route the test signal ONLY into chip channel 1
-    // (ch1set MUX=101) with channels 2-8 shorted (MUX=001), and start again.
-    // frame.ch[0] must carry the ±82k square wave while ch[1..7] stay near
-    // zero — establishing hardware CH1 → frame.ch[0] → GUI lane "CH1"
-    // one-to-one, AND that a restart re-lands the register writes even when
-    // the previous run stopped mid-block (RDATAC register-lockout race).
-    void liveChannelMappingChip1ToFrame0()
+    // signal, then stop, re-route the test signal into chip channels 1, 2,
+    // and 3 one at a time (target CHx MUX=101; others MUX=001 shorted).
+    // frame.ch[0..2] must carry the ±82k square wave only when the matching
+    // chip channel is selected. MonitorView/GlWaveformWidget map frame.ch[c]
+    // directly to GUI lane "CH(c+1)", so this establishes GUI CH1/2/3 ↔
+    // ADS1299 CH1/2/3 one-to-one.
+    void liveChannelMappingFirstThreeChannelsToGuiLanes()
     {
         if (!Mmb0Bootloader::isStyxPresent())
             QSKIP("No 0451:5718 Styx-mode device attached");
@@ -167,53 +170,58 @@ private slots:
             QVERIFY2(warmupSpy.count() > 0, "no frames in the warm-up phase");
         }
 
-        // Phase 2 — same session: CH1 keeps the test signal, CH2..8 shorted.
-        studio::DeviceConfig cfg = allTest.withMux(0, 5);
-        for (int ch = 1; ch < 8; ++ch)
-            cfg = cfg.withMux(ch, 1);
-        src.setConfig(cfg);
+        for (int target = 0; target < 3; ++target) {
+            studio::DeviceConfig cfg = allTest;
+            for (int ch = 0; ch < 8; ++ch)
+                cfg = cfg.withMux(ch, ch == target ? 5 : 1);
+            src.setConfig(cfg);
 
-        QSignalSpy frameSpy(&src, &studio::IDataSource::framesReady);
-        src.start();
-        QTest::qWait(2500);
-        src.stop();
-        QTest::qWait(400);   // let the final one-shot block settle (SDATAC)
+            QSignalSpy frameSpy(&src, &studio::IDataSource::framesReady);
+            src.start();
+            QTest::qWait(2500);
+            src.stop();
+            QTest::qWait(400);   // let the final one-shot block settle (SDATAC)
 
-        int total = 0, ch1InBand = 0, othersQuiet = 0;
-        qint64 sum[8] = {};
-        int mn[8], mx[8];
-        std::fill(std::begin(mn), std::end(mn), INT_MAX);
-        std::fill(std::begin(mx), std::end(mx), INT_MIN);
-        for (int i = 0; i < frameSpy.count(); ++i) {
-            const auto batch = frameSpy.at(i).at(0).value<studio::EegFrameBatch>();
-            for (const auto& f : batch) {
-                ++total;
-                for (int c = 0; c < 8; ++c) {
-                    sum[c] += f.ch[c];
-                    mn[c] = qMin(mn[c], f.ch[c]);
-                    mx[c] = qMax(mx[c], f.ch[c]);
+            int total = 0, targetInBand = 0, othersQuiet = 0;
+            qint64 sum[8] = {};
+            int mn[8], mx[8];
+            std::fill(std::begin(mn), std::end(mn), INT_MAX);
+            std::fill(std::begin(mx), std::end(mx), INT_MIN);
+            for (int i = 0; i < frameSpy.count(); ++i) {
+                const auto batch = frameSpy.at(i).at(0).value<studio::EegFrameBatch>();
+                for (const auto& f : batch) {
+                    ++total;
+                    for (int c = 0; c < 8; ++c) {
+                        sum[c] += f.ch[c];
+                        mn[c] = qMin(mn[c], f.ch[c]);
+                        mx[c] = qMax(mx[c], f.ch[c]);
+                    }
+                    const int targetAbs = qAbs(f.ch[target]);
+                    if (targetAbs > 70000 && targetAbs < 95000) ++targetInBand;
+                    bool quiet = true;
+                    for (int c = 0; c < 8; ++c)
+                        if (c != target && qAbs(f.ch[c]) > 5000) quiet = false;
+                    if (quiet) ++othersQuiet;
                 }
-                const int v0 = qAbs(f.ch[0]);
-                if (v0 > 70000 && v0 < 95000) ++ch1InBand;
-                bool quiet = true;
-                for (int c = 1; c < 8; ++c)
-                    if (qAbs(f.ch[c]) > 5000) quiet = false;
-                if (quiet) ++othersQuiet;
             }
-        }
-        qInfo() << "[live] mapping: total" << total << " ch1-in-band" << ch1InBand
-                << " ch2-8-quiet" << othersQuiet;
-        for (int c = 0; c < 8 && total > 0; ++c)
-            qInfo() << "[live]   ch" << (c + 1) << " mean" << (sum[c] / total)
-                    << " min" << mn[c] << " max" << mx[c];
+            qInfo() << "[live] mapping: target CH" << (target + 1)
+                    << "total" << total << "target-in-band" << targetInBand
+                    << "others-quiet" << othersQuiet;
+            for (int c = 0; c < 8 && total > 0; ++c)
+                qInfo() << "[live]   ch" << (c + 1) << "mean" << (sum[c] / total)
+                        << "min" << mn[c] << "max" << mx[c];
 
-        QVERIFY2(total > 300, qPrintable(QStringLiteral("only %1 frames").arg(total)));
-        QVERIFY2(ch1InBand > total * 95 / 100,
-                 qPrintable(QStringLiteral("ch[0] carried the test signal in only "
-                                           "%1/%2 samples").arg(ch1InBand).arg(total)));
-        QVERIFY2(othersQuiet > total * 95 / 100,
-                 qPrintable(QStringLiteral("ch[1..7] were quiet in only %1/%2 samples")
-                                .arg(othersQuiet).arg(total)));
+            QVERIFY2(total > 300, qPrintable(QStringLiteral("only %1 frames for CH%2")
+                                             .arg(total).arg(target + 1)));
+            QVERIFY2(targetInBand > total * 95 / 100,
+                     qPrintable(QStringLiteral("frame.ch[%1] carried the test signal "
+                                               "in only %2/%3 samples")
+                                    .arg(target).arg(targetInBand).arg(total)));
+            QVERIFY2(othersQuiet > total * 95 / 100,
+                     qPrintable(QStringLiteral("non-target channels were quiet in only "
+                                               "%1/%2 samples for CH%3")
+                                    .arg(othersQuiet).arg(total).arg(target + 1)));
+        }
     }
 };
 

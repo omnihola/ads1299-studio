@@ -129,6 +129,11 @@ private:
     // (0451:9001 → upload ads1299evm-pdk.bin → re-enumerate as 0451:5718).
     bool ensureMmb0StyxMode(QString* errorOut);
 
+    // Probe the Styx filesystem before swapping sources so the GUI only marks a
+    // hardware link up after the board accepts 9P traffic and the ADS1299 is
+    // reachable.
+    bool probeMmb0StyxLink(QString* errorOut);
+
     // Owned objects
     IDataSource*          source_;        // lives on workerThread_
     QThread               workerThread_;

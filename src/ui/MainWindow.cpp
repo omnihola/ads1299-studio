@@ -32,6 +32,7 @@
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "core/acquisition/mmb0/Mmb0Bootloader.h"
 #include "ui/AlertBar.h"
 #include "ui/ControlGating.h"
 #include "ui/AcquisitionPanel.h"
@@ -414,9 +415,16 @@ void MainWindow::onConnectTriggered()
     // handles the cold-boot bootloader (0451:9001 → firmware upload → 5718).
     QString failText;
     QString mmb0Error;
+    const bool mmb0Detected =
+        studio::mmb0::Mmb0Bootloader::isStyxPresent()
+        || studio::mmb0::Mmb0Bootloader::isBootloaderPresent();
     bool swapped = controller_->connectMmb0(&mmb0Error);
     if (swapped) {
         statusBar()->showMessage("Connected: ADS1299 (MMB0)", 4000);
+    } else if (mmb0Detected) {
+        failText = QStringLiteral("MMB0 detected but not connected: %1").arg(
+            mmb0Error.isEmpty() ? QStringLiteral("hardware did not complete handshake")
+                                : mmb0Error);
     } else {
         // Fall back to serial-port selection, always offering the built-in
         // simulator so the default path is never locked out.

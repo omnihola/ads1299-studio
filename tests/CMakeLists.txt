@@ -149,7 +149,9 @@ add_executable(test_mmb0live test_mmb0live.cpp)
 set_target_properties(test_mmb0live PROPERTIES AUTOMOC ON)
 target_link_libraries(test_mmb0live PRIVATE studio_core Qt6::Test)
 add_test(NAME test_mmb0live COMMAND test_mmb0live)
-set_tests_properties(test_mmb0live PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(test_mmb0live PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "live-hardware")
 
 add_executable(test_mmb0datasource test_mmb0datasource.cpp)
 set_target_properties(test_mmb0datasource PROPERTIES AUTOMOC ON)
