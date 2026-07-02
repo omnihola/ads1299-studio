@@ -12,6 +12,8 @@
 
 #include <QWidget>
 #include <QTimer>
+#include <QVector>
+#include <QStringList>
 
 #include "core/dsp/DisplayFilterChain.h"
 
@@ -52,10 +54,13 @@ public slots:
 
 private slots:
     void onFilterChanged();
+    void onChannelSelectionChanged();
 
 private:
     void buildLayout();
     void rebuildFilterChain();
+    QVector<int> visibleChannels() const;
+    QStringList visibleChannelLabels() const;
 
     // ---- Dependencies -------------------------------------------------------
     SessionController* controller_ = nullptr;
@@ -73,6 +78,7 @@ private:
     QComboBox*   notchCombo_   = nullptr;  // Off / 50 Hz / 60 Hz
     QComboBox*   bpCombo_      = nullptr;  // Off / bandpass presets
     QLabel*      filterHint_   = nullptr;
+    QCheckBox*   channelCheck_[8] = {};
 
     // ---- Display-only filter chain ------------------------------------------
     // Applied ONLY to the values sent to the GL widget. Recording path is untouched.

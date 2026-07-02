@@ -92,6 +92,12 @@ void GlWaveformWidget::setChannelCount(int n)
     update();
 }
 
+void GlWaveformWidget::setChannelLabels(const QStringList& labels)
+{
+    channelLabels_ = labels;
+    update();
+}
+
 void GlWaveformWidget::setSampleRate(double sps)
 {
     if (sps > 0.0) {
@@ -424,7 +430,10 @@ void GlWaveformWidget::drawOverlay(int widgetWidth, int widgetHeight)
     for (int c = 0; c < channelCount_; ++c) {
         const float ndcY  = channelCenterNdcY(c, channelCount_);
         const int   py    = static_cast<int>((1.0f - ndcY) * 0.5f * static_cast<float>(widgetHeight));
-        p.drawText(4, py + 5, QString("CH%1").arg(c + 1));
+        const QString label = c < channelLabels_.size()
+                                  ? channelLabels_.at(c)
+                                  : QString("CH%1").arg(c + 1);
+        p.drawText(4, py + 5, label);
 
         // When auto-scale is active, show a small ±<scale> µV readout per lane.
         if (autoScale_ && static_cast<size_t>(c) < autoScaleUv_.size()) {

@@ -18,6 +18,7 @@
 #include <QOpenGLBuffer>
 #include <QOpenGLVertexArrayObject>
 #include <QOpenGLShaderProgram>
+#include <QStringList>
 #include <QTimer>
 
 #include <deque>
@@ -39,6 +40,7 @@ public:
     void setWindowSeconds(double s);        // visible scroll window (default 5 s)
     void setMicrovoltsPerDiv(double uv);    // vertical scale (default 200 µV/div)
     void setAutoScale(bool on);             // per-channel auto-scale (fast-attack/slow-release)
+    void setChannelLabels(const QStringList& labels);
 
     // ---- Data feed -----------------------------------------------------------
     // Append a block of samples.  perChannelSamples[c] contains the new µV values
@@ -70,6 +72,7 @@ private:
     double sampleRate_  = 250.0;
     double windowSec_   = 5.0;
     double uvPerDiv_    = 200.0;
+    QStringList channelLabels_;
 
     // Per-channel auto-scale envelope (µV at the lane edge)
     std::vector<double> autoScaleUv_;   // size == channelCount_

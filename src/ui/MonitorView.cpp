@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QPair>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -106,19 +107,25 @@ void MonitorView::onRenderTick()
     EegFrame frame;
     bool gotAny = false;
 
-    // Accumulate samples across all popped frames into per-channel blocks.
-    std::vector<std::vector<float>> block(static_cast<size_t>(kNumChannels));
+    const QVector<int> visible = visibleChannels();
+    if (visible.isEmpty()) {
+        return;
+    }
+
+    // Accumulate samples across all popped frames into visible per-channel blocks.
+    std::vector<std::vector<float>> block(static_cast<size_t>(visible.size()));
 
     while (controller_->displayBuffer().pop(frame)) {
         gotAny = true;
-        for (int c = 0; c < kNumChannels; ++c) {
+        for (int lane = 0; lane < visible.size(); ++lane) {
+            const int c = visible.at(lane);
             // Use per-channel configured gain so µV scale is correct.
             ScaleConverter converter(gains_[c]);
             const double uv = converter.countsToMicrovolts(frame.ch[c]);
             // Apply display-only filter chain (notch/bandpass if configured).
             // The raw frame is NOT modified — recording path is entirely unaffected.
             const double displayUv = filterChain_.process(c, uv);
-            block[static_cast<size_t>(c)].push_back(static_cast<float>(displayUv));
+            block[static_cast<size_t>(lane)].push_back(static_cast<float>(displayUv));
         }
     }
 
@@ -141,8 +148,13 @@ void MonitorView::buildLayout()
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // ---- Top control bar -----------------------------------------------
-    auto* controlBar    = new QWidget(this);
+    // ---- Top controls --------------------------------------------------
+    auto* controlPane = new QWidget(this);
+    auto* paneLayout = new QVBoxLayout(controlPane);
+    paneLayout->setContentsMargins(0, 0, 0, 0);
+    paneLayout->setSpacing(0);
+
+    auto* controlBar    = new QWidget(controlPane);
     auto* controlLayout = new QHBoxLayout(controlBar);
     controlLayout->setContentsMargins(8, 4, 8, 4);
     controlLayout->setSpacing(8);
@@ -237,15 +249,38 @@ void MonitorView::buildLayout()
     controlLayout->addWidget(autoScaleBox_);
     controlLayout->addSpacing(4);  // keep "Auto" off the right edge
 
+    auto* channelBar = new QWidget(controlPane);
+    auto* channelLayout = new QHBoxLayout(channelBar);
+    channelLayout->setContentsMargins(8, 0, 8, 4);
+    channelLayout->setSpacing(6);
+
+    auto* channelLabel = new QLabel("Channels:", channelBar);
+    channelLabel->setStyleSheet(QString("color: %1;").arg(theme::kTextMuted));
+    channelLayout->addWidget(channelLabel);
+
+    for (int ch = 0; ch < kNumChannels; ++ch) {
+        channelCheck_[ch] = new QCheckBox(QString("CH%1").arg(ch + 1), channelBar);
+        channelCheck_[ch]->setObjectName(QString("monitorChannel%1Check").arg(ch + 1));
+        channelCheck_[ch]->setChecked(true);
+        connect(channelCheck_[ch], &QCheckBox::toggled,
+                this, &MonitorView::onChannelSelectionChanged);
+        channelLayout->addWidget(channelCheck_[ch]);
+    }
+    channelLayout->addStretch();
+
+    paneLayout->addWidget(controlBar);
+    paneLayout->addWidget(channelBar);
+
     // ---- GL waveform plot ----------------------------------------------
     glPlot_ = new studio::gl::GlWaveformWidget(this);
     glPlot_->setChannelCount(kNumChannels);
+    glPlot_->setChannelLabels(visibleChannelLabels());
     glPlot_->setSampleRate(static_cast<double>(sampleRateHz_));
     glPlot_->setWindowSeconds(5.0);
     glPlot_->setMicrovoltsPerDiv(uvPerDiv_);
     glPlot_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    mainLayout->addWidget(controlBar, 0);
+    mainLayout->addWidget(controlPane, 0);
     mainLayout->addWidget(glPlot_, 1);
 }
 
@@ -257,6 +292,51 @@ void MonitorView::onFilterChanged()
 {
     rebuildFilterChain();
     filterChain_.reset();
+}
+
+void MonitorView::onChannelSelectionChanged()
+{
+    if (visibleChannels().isEmpty()) {
+        auto* box = qobject_cast<QCheckBox*>(sender());
+        if (!box) {
+            box = channelCheck_[0];
+        }
+        if (box) {
+            QSignalBlocker blocker(box);
+            box->setChecked(true);
+        }
+    }
+
+    if (glPlot_) {
+        const int visibleCount = std::max(1, static_cast<int>(visibleChannels().size()));
+        glPlot_->setChannelCount(visibleCount);
+        glPlot_->setChannelLabels(visibleChannelLabels());
+        glPlot_->clearData();
+    }
+    filterChain_.reset();
+}
+
+QVector<int> MonitorView::visibleChannels() const
+{
+    QVector<int> result;
+    result.reserve(kNumChannels);
+    for (int ch = 0; ch < kNumChannels; ++ch) {
+        if (channelCheck_[ch] == nullptr || channelCheck_[ch]->isChecked()) {
+            result.push_back(ch);
+        }
+    }
+    return result;
+}
+
+QStringList MonitorView::visibleChannelLabels() const
+{
+    QStringList labels;
+    const QVector<int> channels = visibleChannels();
+    labels.reserve(channels.size());
+    for (int ch : channels) {
+        labels << QString("CH%1").arg(ch + 1);
+    }
+    return labels;
 }
 
 void MonitorView::rebuildFilterChain()
