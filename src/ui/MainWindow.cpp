@@ -392,6 +392,34 @@ void MainWindow::updateControlGates()
     connectAction_->setEnabled(gating::connectEnabled(connecting_));
 }
 
+// Offer the serial-port/simulator fallback prompt. Returns true when a new
+// source became active (sourceChanged has already refreshed the status);
+// otherwise leaves/sets *failText with the reason for the persistent readout.
+bool MainWindow::promptFallbackSource(const QString& mmb0Error, QString* failText)
+{
+    QStringList options = SerialSource::availablePorts();
+    options << simulatorOptionLabel();
+    const QString pick = promptSerialPort(options);
+
+    if (pick == simulatorOptionLabel()) {
+        controller_->setSource(new SimulatedSource(), SourceType::Simulated);
+        return true;
+    }
+    if (!pick.isEmpty()) {
+        if (controller_->connectSerial(pick)) {
+            statusBar()->showMessage(QString("Connected to %1").arg(pick), 4000);
+            return true;
+        }
+        *failText = QStringLiteral("Failed to open %1").arg(pick);
+        return false;
+    }
+    if (failText->isEmpty()) {
+        *failText = QStringLiteral("Not connected — %1").arg(
+            mmb0Error.isEmpty() ? QStringLiteral("no device selected") : mmb0Error);
+    }
+    return false;
+}
+
 void MainWindow::onConnectTriggered()
 {
     // Remember the persistent readout so a failed/canceled attempt that
@@ -422,31 +450,22 @@ void MainWindow::onConnectTriggered()
     if (swapped) {
         statusBar()->showMessage("Connected: ADS1299 (MMB0)", 4000);
     } else if (mmb0Detected) {
+        // The board is present but unusable (wedged firmware, missing image,
+        // failed handshake…) — surface that instead of a serial-port dialog.
         failText = QStringLiteral("MMB0 detected but not connected: %1").arg(
             mmb0Error.isEmpty() ? QStringLiteral("hardware did not complete handshake")
                                 : mmb0Error);
+        // But if the ACTIVE source is a dead device link, Connect is the
+        // user's only way out — still offer the fallback prompt so they can
+        // reach the simulator instead of being stranded with Start disabled.
+        const bool stranded = !deviceLinkUp_
+            && controller_->sourceType() != SourceType::Simulated;
+        if (stranded)
+            swapped = promptFallbackSource(mmb0Error, &failText);
     } else {
         // Fall back to serial-port selection, always offering the built-in
         // simulator so the default path is never locked out.
-        QStringList options = SerialSource::availablePorts();
-        options << simulatorOptionLabel();
-        const QString pick = promptSerialPort(options);
-
-        if (pick == simulatorOptionLabel()) {
-            controller_->setSource(new SimulatedSource(), SourceType::Simulated);
-            swapped = true;
-        } else if (!pick.isEmpty()) {
-            swapped = controller_->connectSerial(pick);
-            if (swapped) {
-                statusBar()->showMessage(QString("Connected to %1").arg(pick), 4000);
-            } else {
-                failText = QStringLiteral("Failed to open %1").arg(pick);
-            }
-        } else {
-            failText = QStringLiteral("Not connected — %1").arg(
-                mmb0Error.isEmpty() ? QStringLiteral("no device selected")
-                                    : mmb0Error);
-        }
+        swapped = promptFallbackSource(mmb0Error, &failText);
     }
 
     connecting_ = false;

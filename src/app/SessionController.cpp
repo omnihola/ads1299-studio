@@ -17,9 +17,10 @@ static QString addMmb0RecoveryHint(const QString& message)
     if (message.contains(QStringLiteral("bulk OUT failed"))
         && message.contains(QStringLiteral("LIBUSB_ERROR_TIMEOUT"))) {
         return message + QStringLiteral(
-            " (USBStyx is enumerated, but its bulk OUT endpoint is not accepting "
-            "requests. Close other clients, replug the MMB0 USB connection, or "
-            "reload the MMB0 firmware.)");
+            " (USBStyx is enumerated but its firmware is wedged. Replugging "
+            "USB alone does NOT recover it — the DSP keeps running on the "
+            "external supply. Unplug BOTH the power barrel and USB, wait a "
+            "few seconds, then reconnect power first, USB second.)");
     }
     return message;
 }
@@ -377,7 +378,7 @@ bool SessionController::probeMmb0StyxLink(QString* errorOut)
     QByteArray version;
     if (!client.readPath(QStringLiteral("/version"), version, 64)) {
         const QString err = client.lastError();
-        client.clunk(1); // best-effort: release the root fid before reconnecting
+        client.clunk(client.rootFid()); // best-effort: release the root fid before reconnecting
         return fail(QStringLiteral("MMB0 probe read /version failed: %1")
                         .arg(err),
                     "SessionController.connectMmb0.probeVersionFailed");
@@ -386,7 +387,7 @@ bool SessionController::probeMmb0StyxLink(QString* errorOut)
     QByteArray devid;
     if (!client.readPath(QStringLiteral("/ads1299evm/conf/devid"), devid, 64)) {
         const QString err = client.lastError();
-        client.clunk(1); // best-effort
+        client.clunk(client.rootFid()); // best-effort
         return fail(QStringLiteral("MMB0 probe read ADS1299 devid failed: %1")
                         .arg(err),
                     "SessionController.connectMmb0.probeDevidFailed");
@@ -394,7 +395,7 @@ bool SessionController::probeMmb0StyxLink(QString* errorOut)
 
     const QString trimmedDevid = QString::fromLatin1(devid.trimmed());
     if (trimmedDevid != QStringLiteral("0x3E")) {
-        client.clunk(1); // best-effort
+        client.clunk(client.rootFid()); // best-effort
         return fail(QStringLiteral("MMB0 probe found unexpected ADS1299 devid %1")
                         .arg(trimmedDevid.isEmpty()
                                  ? QStringLiteral("<empty>")
@@ -402,7 +403,7 @@ bool SessionController::probeMmb0StyxLink(QString* errorOut)
                     "SessionController.connectMmb0.probeUnexpectedDevid");
     }
 
-    client.clunk(1); // best-effort: source bringUp attaches a fresh root fid
+    client.clunk(client.rootFid()); // best-effort: source bringUp attaches a fresh root fid
     Logger::instance().log("info", "SessionController.connectMmb0.probeOk",
                            QJsonObject{{"version", QString::fromLatin1(version.trimmed())},
                                        {"devid", trimmedDevid}});

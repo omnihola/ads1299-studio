@@ -74,6 +74,9 @@ private:
     void setConnectionStatus(LedIndicator::Status led, const QString& text);
     void updateControlGates();
 
+    // Serial/simulator fallback chooser used by onConnectTriggered.
+    bool promptFallbackSource(const QString& mmb0Error, QString* failText);
+
     // ---- Owned controller ---------------------------------------------------
     SessionController* controller_ = nullptr;
 
