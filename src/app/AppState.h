@@ -6,6 +6,12 @@ namespace studio {
 
 enum class State { Idle, Streaming, Recording };
 
+/// Which kind of acquisition source is currently active.
+/// The simulator is built-in and always usable; hardware sources only become
+/// active through a successful connect (SessionController::connectSerial /
+/// connectMmb0).
+enum class SourceType { Simulated, Serial, Mmb0 };
+
 struct Metrics {
     double   sps           = 0.0;
     uint64_t droppedSamples = 0;

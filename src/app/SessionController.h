@@ -85,7 +85,13 @@ public:
     // Serial). If streaming, stopStreaming() is called first. The OLD source is
     // safely destroyed on its own thread; the NEW source is moved to the
     // (restarted) workerThread_.  Does NOT auto-start; call startStreaming().
-    void setSource(IDataSource* newSource);
+    // @p type records what kind of source is now active (see sourceType()) —
+    // deliberately NOT defaulted: a defaulted Simulated would let a future
+    // caller silently label a hardware source as the always-startable sim.
+    void setSource(IDataSource* newSource, SourceType type);
+
+    // Kind of the currently active source. GUI-thread only.
+    SourceType sourceType() const { return sourceType_; }
 
     // Convenience: create a SerialSource, open portName, and if successful call
     // setSource(). Returns true on success.  On failure, deletes the source and
@@ -93,10 +99,13 @@ public:
     bool connectSerial(const QString& portName, int baud = 921600);
 
     // Convenience: detect and open the first MMB0 USB device (VID=0x0451,
-    // PID=0x5718). Creates an Mmb0UsbTransport + Mmb0DataSource and calls
-    // setSource(). Returns true on success. If no device is present or open
-    // fails, returns false without touching the current source.
-    bool connectMmb0();
+    // PID=0x5718). If the board is still in cold-boot bootloader mode
+    // (VID=0x0451 PID=0x9001), the firmware image is located, validated and
+    // uploaded first (the board re-enumerates as 5718). Creates an
+    // Mmb0UsbTransport + Mmb0DataSource and calls setSource(). Returns true on
+    // success. On failure returns false without touching the current source;
+    // if @p errorOut is non-null it receives a user-facing explanation.
+    bool connectMmb0(QString* errorOut = nullptr);
 
 public slots:
     void startStreaming();
@@ -108,12 +117,17 @@ signals:
     void errorOccurred(QString message);
     void recordingChanged(bool recording);
     void configChanged(studio::DeviceConfig config);
+    void sourceChanged(studio::SourceType type, QString name);
 
 private slots:
     void onSourceError(const QString& message);
 
 private:
     void setState(State s);
+
+    // connectMmb0 helper: firmware-upload path for a cold-booted board
+    // (0451:9001 → upload ads1299evm-pdk.bin → re-enumerate as 0451:5718).
+    bool ensureMmb0StyxMode(QString* errorOut);
 
     // Owned objects
     IDataSource*          source_;        // lives on workerThread_
@@ -138,6 +152,9 @@ private:
 
     // Device configuration
     DeviceConfig          config_;
+
+    // Kind of the active source (GUI-thread only; updated in setSource).
+    SourceType            sourceType_ = SourceType::Simulated;
 
     // Session state — atomic so state() is safe to call from any thread.
     std::atomic<State>    state_         {State::Idle};

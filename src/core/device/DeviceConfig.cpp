@@ -29,6 +29,7 @@ std::array<int, 8>   DeviceConfig::gain()        const { return m_gain; }
 std::array<int, 8>   DeviceConfig::mux()         const { return m_mux; }
 bool                 DeviceConfig::srb1()         const { return m_srb1; }
 bool                 DeviceConfig::biasEnabled()  const { return m_biasEnabled; }
+bool                 DeviceConfig::internalTestSignal() const { return m_testSignal; }
 
 // ---------------------------------------------------------------------------
 // Immutable with* mutators
@@ -73,6 +74,13 @@ DeviceConfig DeviceConfig::withBiasEnabled(bool enabled) const
     return copy;
 }
 
+DeviceConfig DeviceConfig::withInternalTestSignal(bool enabled) const
+{
+    DeviceConfig copy = *this;
+    copy.m_testSignal = enabled;
+    return copy;
+}
+
 // ---------------------------------------------------------------------------
 // Register encoding
 // ---------------------------------------------------------------------------
@@ -87,8 +95,9 @@ std::array<uint8_t, 23> DeviceConfig::toRegisterBytes() const
     // index 0 → CONFIG1 (0x01): 0x90 | DR code
     bytes[0] = static_cast<uint8_t>(0x90u | regs::encodeSampleRate(m_sampleRate));
 
-    // index 1 → CONFIG2 (0x02): default 0xC0
-    bytes[1] = 0xC0u;
+    // index 1 → CONFIG2 (0x02): 0xC0, +INT_CAL (0x10) for the internal
+    // test signal (verified on hardware with 0xD0)
+    bytes[1] = m_testSignal ? 0xD0u : 0xC0u;
 
     // index 2 → CONFIG3 (0x03): biasEnabled -> 0xEC (PD_BIAS + BIASREF_INT set), else 0xE0
     bytes[2] = m_biasEnabled ? 0xECu : 0xE0u;
@@ -129,6 +138,9 @@ DeviceConfig DeviceConfig::fromRegisterBytes(const std::array<uint8_t, 23>& byte
     // CONFIG1 (index 0): decode DR[2:0]
     cfg.m_sampleRate = regs::decodeSampleRate(bytes[0]);
 
+    // CONFIG2 (index 1): INT_CAL bit (bit 4) = internal test signal.
+    cfg.m_testSignal = (bytes[1] & 0x10u) != 0u;
+
     // CONFIG3 (index 2): biasEnabled tracks the PD_BIAS bit (bit 3). Test the bit
     // rather than the exact byte so a real device's CONFIG3 read-back (which may
     // carry other reserved/status bits) still parses correctly. Our writer emits
@@ -158,6 +170,7 @@ QJsonObject DeviceConfig::toJson() const
     obj["sampleRate"] = m_sampleRate;
     obj["srb1"]       = m_srb1;
     obj["biasEnabled"] = m_biasEnabled;
+    obj["testSignal"]  = m_testSignal;
 
     QJsonArray gainArr;
     QJsonArray muxArr;

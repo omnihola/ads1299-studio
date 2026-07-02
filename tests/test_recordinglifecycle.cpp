@@ -193,6 +193,43 @@ private slots:
                  "BDF must contain at least 1 annotation");
         edfclose_file(rh);
     }
+
+    // stopStreaming() during an active recording (Stop toolbar press, or the
+    // GUI force-stop on a hardware-source error) must finalize the recording:
+    // emit recordingChanged(false) so the UI unsticks, and close the BDF so
+    // the file is readable without waiting for app exit.
+    void stopStreamingWhileRecordingFinalizesRecording()
+    {
+        SessionController ctrl(new SimulatedSource(1));
+        ctrl.startStreaming();
+        QTest::qWait(150);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString basePath = dir.filePath("abort");
+
+        auto meta = SessionMetadata().withSubjectId("Abort").withSampleRate(250);
+        QVERIFY(ctrl.startRecording(basePath, meta));
+        QCOMPARE(ctrl.state(), State::Recording);
+        QTest::qWait(200);  // capture some samples
+
+        QSignalSpy recSpy(&ctrl, &SessionController::recordingChanged);
+
+        // Act: stop streaming directly, without an explicit stopRecording().
+        ctrl.stopStreaming();
+
+        // Assert: recording was finalized on the way down.
+        QCOMPARE(ctrl.state(), State::Idle);
+        QVERIFY2(recSpy.count() >= 1 && !recSpy.last().at(0).toBool(),
+                 "recordingChanged(false) must be emitted so the UI unsticks");
+
+        // The BDF must be finalized and readable NOW (not only at app exit).
+        edflib_hdr_t hdr;
+        const int rh = edfopen_file_readonly((basePath + ".bdf").toUtf8().constData(),
+                                             &hdr, EDFLIB_READ_ANNOTATIONS);
+        QVERIFY2(rh >= 0, "BDF must be finalized/readable after stopStreaming");
+        edfclose_file(rh);
+    }
 };
 
 QTEST_MAIN(TestRecordingLifecycle)

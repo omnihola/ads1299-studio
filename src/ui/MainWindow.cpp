@@ -5,6 +5,8 @@
 #include "ui/MainWindow.h"
 
 #include <QAction>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QDockWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -31,6 +33,7 @@
 #include "core/acquisition/SerialSource.h"
 #include "core/acquisition/SimulatedSource.h"
 #include "ui/AlertBar.h"
+#include "ui/ControlGating.h"
 #include "ui/AcquisitionPanel.h"
 #include "ui/ImpedanceView.h"
 #include "ui/MonitorView.h"
@@ -152,14 +155,17 @@ void MainWindow::buildToolbar()
     toolbar->setStyleSheet("QToolBar { border: none; spacing: 4px; }");
 
     connectAction_ = new QAction("Connect", this);
+    connectAction_->setObjectName("connectAction");
     connectAction_->setToolTip("Connect to device");
 
     startAction_ = new QAction("Start", this);
+    startAction_->setObjectName("startAction");
     startAction_->setCheckable(true);
     startAction_->setShortcut(QKeySequence(Qt::Key_F5));
     startAction_->setToolTip("Start / stop streaming (F5)");
 
     recordAction_ = new QAction("Record", this);
+    recordAction_->setObjectName("recordAction");
     recordAction_->setCheckable(true);
     recordAction_->setShortcut(QKeySequence("Ctrl+R"));
     recordAction_->setToolTip("Start / stop recording (Ctrl+R)");
@@ -179,40 +185,8 @@ void MainWindow::buildToolbar()
     toolbar->addAction(helpAction);
 
     connect(startAction_, &QAction::toggled, this, &MainWindow::onStartToggled);
-
-    // Connect action: list available serial ports and swap the active source.
-    connect(connectAction_, &QAction::triggered, this, [this]() {
-        // Prefer MMB0 USB device (ADS1299 via libusb, VID=0x0451 PID=0x5718).
-        if (controller_->connectMmb0()) {
-            linkLed_->setStatus(LedIndicator::Status::Ok);
-            statusBar()->showMessage("Connected: ADS1299 (MMB0)", 4000);
-            return;
-        }
-
-        // Fall back to serial port selection.
-        const QStringList ports = SerialSource::availablePorts();
-        if (ports.isEmpty()) {
-            linkLed_->setStatus(LedIndicator::Status::Warn);
-            statusBar()->showMessage(
-                "No MMB0 (0451:5718) or serial device found", 5000);
-            return;
-        }
-        bool ok = false;
-        const QString port = QInputDialog::getItem(
-            this, "Connect to Device", "Select serial port:", ports,
-            /*current=*/0, /*editable=*/false, &ok);
-        if (!ok || port.isEmpty()) return;
-
-        const bool connected = controller_->connectSerial(port);
-        if (connected) {
-            linkLed_->setStatus(LedIndicator::Status::Ok);
-            statusBar()->showMessage(QString("Connected to %1").arg(port), 4000);
-        } else {
-            linkLed_->setStatus(LedIndicator::Status::Error);
-            statusBar()->showMessage(
-                QString("Failed to open %1").arg(port), 5000);
-        }
-    });
+    connect(connectAction_, &QAction::triggered,
+            this, &MainWindow::onConnectTriggered);
 
     // Toolbar Record toggles the RecordingPanel's record/stop. The panel is
     // built later (buildTabs); the lambda dereferences recordingPanel_ only
@@ -339,11 +313,13 @@ void MainWindow::buildStatusBar()
     linkLed_->setObjectName("linkLed");
     linkLed_->setStatus(LedIndicator::Status::Off);
 
-    auto* linkTextLabel = new QLabel("Link", linkWidget);
-    linkTextLabel->setObjectName("linkLabel");
+    // Persistent connection status — reflects the last connect result until
+    // the next attempt (unlike the transient statusBar toast).
+    connLabel_ = new QLabel(QStringLiteral("Source: Simulator"), linkWidget);
+    connLabel_->setObjectName("connStatusLabel");
 
     linkLayout->addWidget(linkLed_);
-    linkLayout->addWidget(linkTextLabel);
+    linkLayout->addWidget(connLabel_);
     sb->addWidget(linkWidget);
 
     // Monospace metric labels
@@ -376,8 +352,108 @@ void MainWindow::wireController()
             this, &MainWindow::onMetricsUpdated);
     connect(controller_, &SessionController::stateChanged,
             this, &MainWindow::onStateChanged);
+    connect(controller_, &SessionController::sourceChanged,
+            this, &MainWindow::onSourceChanged);
     connect(controller_, &SessionController::errorOccurred,
             this, &MainWindow::onErrorOccurred);
+
+    updateControlGates();
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Connection flow / control gating
+// ──────────────────────────────────────────────────────────────────────────────
+
+QString MainWindow::simulatorOptionLabel()
+{
+    return QStringLiteral("Simulator (built-in)");
+}
+
+QString MainWindow::promptSerialPort(const QStringList& options)
+{
+    bool ok = false;
+    const QString pick = QInputDialog::getItem(
+        this, "Connect to Device", "Select source:", options,
+        /*current=*/0, /*editable=*/false, &ok);
+    return ok ? pick : QString();
+}
+
+void MainWindow::setConnectionStatus(LedIndicator::Status led, const QString& text)
+{
+    linkLed_->setStatus(led);
+    connLabel_->setText(text);
+}
+
+void MainWindow::updateControlGates()
+{
+    startAction_->setEnabled(
+        gating::startEnabled(controller_->sourceType(), deviceLinkUp_, connecting_));
+    connectAction_->setEnabled(gating::connectEnabled(connecting_));
+}
+
+void MainWindow::onConnectTriggered()
+{
+    // Remember the persistent readout so a failed/canceled attempt that
+    // leaves the current source untouched can restore it.
+    const QString prevText = connLabel_->text();
+    const LedIndicator::Status prevLed = linkLed_->status();
+
+    connecting_ = true;
+    updateControlGates();
+    setConnectionStatus(LedIndicator::Status::Warn, QStringLiteral("Connecting…"));
+    // The connect attempts below are synchronous — repaint the transient
+    // state so the user sees that the click registered.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+
+    // Any successful connect swaps the source and emits sourceChanged, whose
+    // handler (onSourceChanged) owns the persistent success status and the
+    // link flag. This handler only manages the in-flight state and the
+    // failure/cancel outcomes.
+    //
+    // Prefer the MMB0 USB device (ADS1299 via libusb). connectMmb0 also
+    // handles the cold-boot bootloader (0451:9001 → firmware upload → 5718).
+    QString failText;
+    QString mmb0Error;
+    bool swapped = controller_->connectMmb0(&mmb0Error);
+    if (swapped) {
+        statusBar()->showMessage("Connected: ADS1299 (MMB0)", 4000);
+    } else {
+        // Fall back to serial-port selection, always offering the built-in
+        // simulator so the default path is never locked out.
+        QStringList options = SerialSource::availablePorts();
+        options << simulatorOptionLabel();
+        const QString pick = promptSerialPort(options);
+
+        if (pick == simulatorOptionLabel()) {
+            controller_->setSource(new SimulatedSource(), SourceType::Simulated);
+            swapped = true;
+        } else if (!pick.isEmpty()) {
+            swapped = controller_->connectSerial(pick);
+            if (swapped) {
+                statusBar()->showMessage(QString("Connected to %1").arg(pick), 4000);
+            } else {
+                failText = QStringLiteral("Failed to open %1").arg(pick);
+            }
+        } else {
+            failText = QStringLiteral("Not connected — %1").arg(
+                mmb0Error.isEmpty() ? QStringLiteral("no device selected")
+                                    : mmb0Error);
+        }
+    }
+
+    connecting_ = false;
+    if (!swapped) {
+        // Source unchanged. An intact hardware link keeps its "Connected"
+        // readout (the toast carries the failure); otherwise show it
+        // persistently.
+        if (deviceLinkUp_) {
+            setConnectionStatus(prevLed, prevText);
+            statusBar()->showMessage(failText, 5000);
+        } else {
+            setConnectionStatus(LedIndicator::Status::Warn, failText);
+        }
+    }
+    updateControlGates();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -393,11 +469,9 @@ void MainWindow::onStartToggled(bool on)
 {
     if (on) {
         controller_->startStreaming();
-        linkLed_->setStatus(LedIndicator::Status::Ok);
         startAction_->setText("Stop");
     } else {
         controller_->stopStreaming();
-        linkLed_->setStatus(LedIndicator::Status::Off);
         startAction_->setText("Start");
     }
 }
@@ -428,13 +502,41 @@ void MainWindow::onStateChanged(studio::State s)
         linkLed_->setStatus(LedIndicator::Status::Ok);
         break;
     case State::Idle:
-        linkLed_->setStatus(LedIndicator::Status::Off);
+        // Keep the LED green while a hardware link is up; grey otherwise.
+        linkLed_->setStatus(deviceLinkUp_ ? LedIndicator::Status::Ok
+                                          : LedIndicator::Status::Off);
         break;
     }
 }
 
+void MainWindow::onSourceChanged(studio::SourceType type, const QString& name)
+{
+    // A hardware source only becomes active through a successful connect, so
+    // its arrival implies a live link; the simulator needs none.
+    deviceLinkUp_ = (type != SourceType::Simulated);
+    if (type == SourceType::Simulated) {
+        setConnectionStatus(LedIndicator::Status::Off,
+                            QStringLiteral("Source: Simulator"));
+    } else {
+        setConnectionStatus(LedIndicator::Status::Ok,
+                            QStringLiteral("Connected: %1").arg(name));
+    }
+    updateControlGates();
+}
+
 void MainWindow::onErrorOccurred(const QString& message)
 {
+    // A source error from a hardware device means the link is no longer
+    // trustworthy: stop streaming, drop the link flag, and gate Start off
+    // until the user reconnects.
+    if (controller_->sourceType() != SourceType::Simulated && deviceLinkUp_) {
+        deviceLinkUp_ = false;
+        if (startAction_->isChecked()) {
+            startAction_->setChecked(false);   // triggers stopStreaming()
+        }
+        connLabel_->setText(QStringLiteral("Connection lost — %1").arg(message));
+        updateControlGates();
+    }
     linkLed_->setStatus(LedIndicator::Status::Error);
     statusBar()->showMessage(message, 5000);
 }

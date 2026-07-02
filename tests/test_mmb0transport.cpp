@@ -123,6 +123,23 @@ private slots:
         QCOMPARE(msg, validFrame);
     }
 
+    // ── send() wire framing ──────────────────────────────────────────────────
+    // The verified reference client (mmb0_acquire.c styx_tx) sends EXACTLY the
+    // 9P message bytes — no zero-padding — and terminates transfers that are an
+    // exact multiple of the 64-byte packet size with a zero-length packet (ZLP)
+    // so the device sees the end of the transfer. Zero-padding instead would
+    // inject garbage bytes that the estyx deframer reads as the next message's
+    // size field.
+    void zlpNeededOnlyOnPacketMultiples()
+    {
+        QVERIFY(!Mmb0UsbTransport::needsZlp(1));
+        QVERIFY(!Mmb0UsbTransport::needsZlp(63));
+        QVERIFY( Mmb0UsbTransport::needsZlp(64));
+        QVERIFY(!Mmb0UsbTransport::needsZlp(65));
+        QVERIFY( Mmb0UsbTransport::needsZlp(128));
+        QVERIFY(!Mmb0UsbTransport::needsZlp(0));   // nothing sent → no ZLP
+    }
+
     // ── Device enumeration: must not crash ───────────────────────────────────
     void enumerationDoesNotCrash()
     {

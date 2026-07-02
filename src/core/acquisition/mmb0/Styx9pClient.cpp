@@ -117,7 +117,8 @@ bool Styx9pClient::clunk(uint32_t fid)
     return transact(tmsg, MsgType::Rclunk, r);
 }
 
-bool Styx9pClient::readPath(const QString& path, QByteArray& out, int maxBytes)
+bool Styx9pClient::readPath(const QString& path, QByteArray& out, int maxBytes,
+                            uint32_t maxChunk)
 {
     uint32_t fid = 0;
     if (!walkTo(path, fid))
@@ -129,11 +130,13 @@ bool Styx9pClient::readPath(const QString& path, QByteArray& out, int maxBytes)
         return false;
     }
 
-    // Choose chunk size: min(iounit (if >0), msize - IOHDRSZ)
+    // Choose chunk size: min(iounit (if >0), msize - IOHDRSZ, maxChunk (if >0))
     const uint32_t msizeAvail = (m_msize > IOHDRSZ) ? (m_msize - IOHDRSZ) : 512u;
-    const uint32_t chunkSize  = (iounit > 0)
+    uint32_t chunkSize        = (iounit > 0)
                                     ? std::min(iounit, msizeAvail)
                                     : msizeAvail;
+    if (maxChunk > 0)
+        chunkSize = std::min(chunkSize, maxChunk);
 
     out.clear();
     uint64_t offset = 0;
@@ -184,13 +187,15 @@ bool Styx9pClient::writePath(const QString& path, const QByteArray& data)
 bool Styx9pClient::transact(const QByteArray& tmsg, MsgType expectedR, RMessage& out)
 {
     if (!m_transport->send(tmsg)) {
-        m_lastError = QStringLiteral("transport send failed");
+        m_lastError = QStringLiteral("transport send failed: %1")
+                          .arg(m_transport->lastError());
         return false;
     }
 
     QByteArray raw;
     if (!m_transport->recv(raw, m_timeoutMs)) {
-        m_lastError = QStringLiteral("transport recv timeout or error");
+        m_lastError = QStringLiteral("transport recv failed: %1")
+                          .arg(m_transport->lastError());
         return false;
     }
 

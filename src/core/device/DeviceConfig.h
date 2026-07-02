@@ -23,12 +23,16 @@ public:
     std::array<int, 8>   mux()          const;
     bool                 srb1()         const;
     bool                 biasEnabled()  const;
+    bool                 internalTestSignal() const;
 
     DeviceConfig withSampleRate(int sps)                  const;
     DeviceConfig withGain(int channel, int gainValue)     const;  ///< channel 0-based
     DeviceConfig withMux(int channel, int muxMode)        const;  ///< channel 0-based
     DeviceConfig withSrb1(bool enabled)                   const;
     DeviceConfig withBiasEnabled(bool enabled)            const;
+    /// Enable the on-chip ±1.875 mV calibration square wave (CONFIG2 INT_CAL).
+    /// Route it to the inputs with withMux(ch, 5) per channel.
+    DeviceConfig withInternalTestSignal(bool enabled)     const;
 
     /// Returns the 23-byte writable register block CONFIG1(0x01)..CONFIG4(0x17).
     /// Index 0 corresponds to register address 0x01.
@@ -45,6 +49,7 @@ private:
     std::array<int, 8> m_mux;
     bool               m_srb1;
     bool               m_biasEnabled;
+    bool               m_testSignal = false;
 };
 
 /// Free function: format a 23-byte register block as a human-readable hex string.

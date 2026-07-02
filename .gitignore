@@ -17,6 +17,10 @@
 *.bdf
 *.edf
 
+# MMB0 firmware image (TI-licensed; user supplies their own copy —
+# see Mmb0Bootloader::defaultCandidates)
+/firmware/
+
 # SDD scratch
 /.superpowers/
 

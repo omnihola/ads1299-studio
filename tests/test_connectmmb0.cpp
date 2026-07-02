@@ -7,6 +7,7 @@
 #include <QtTest>
 #include "app/SessionController.h"
 #include "core/acquisition/SimulatedSource.h"
+#include "core/acquisition/mmb0/Mmb0Bootloader.h"
 
 class TestConnectMmb0 : public QObject
 {
@@ -17,6 +18,14 @@ private slots:
     // and the controller's existing source must remain fully operational.
     void connectMmb0NoDeviceReturnsFalseGracefully()
     {
+        // This test asserts the NO-DEVICE behavior; with a real board attached
+        // connectMmb0 would succeed (and even flash firmware) — skip instead
+        // of driving hardware from a unit test.
+        if (studio::mmb0::Mmb0Bootloader::isStyxPresent()
+            || studio::mmb0::Mmb0Bootloader::isBootloaderPresent()) {
+            QSKIP("MMB0 hardware attached — no-device behavior not testable");
+        }
+
         // Arrange: controller with a live SimulatedSource (1-channel, 250 SPS).
         studio::SessionController ctrl(new studio::SimulatedSource(1));
 

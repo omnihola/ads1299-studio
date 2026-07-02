@@ -7,7 +7,13 @@
 
 namespace studio::mmb0 {
 
-// Parses MMB0 /ads1299evm/data stream (ADS1299 RDATAC records) into EegFrame.
+// Parses a native ADS1299 RDATAC byte stream into EegFrame.
+//
+// NOTE: the MMB0 /ads1299evm/data path does NOT use this parser — the PDK
+// firmware queues 32-bit words (9 per sample), decoded by Ads1299WordParser.
+// This 27-byte record decoder is retained as the native RDATAC reference and
+// as a fallback in case the raw hardware dump (pending, see the 2026-07-01
+// handoff) shows a byte-packed wire layout after all.
 //
 // Record format: 27 bytes = status[3] + ch1[3] … ch8[3]
 // All values are 24-bit, big-endian (MSB first), two's-complement.

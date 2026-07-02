@@ -13,18 +13,25 @@ public:
     explicit Styx9pClient(ITransport* transport, int timeoutMs = 3000);
 
     // Tversion handshake; stores negotiated msize.
+    // NOT used for the MMB0/estyx firmware: the verified reference client
+    // attaches directly without version negotiation (see Mmb0DataSource).
     bool connectSession(uint32_t msize = 8192,
                         const QString& version = QStringLiteral("9P2000.USB.estyx"));
 
-    // Tattach from root; sets rootFid.
+    // Tattach from root; sets rootFid. The estyx firmware expects
+    // uname/aname "nobody"/"nobody" (verified on hardware).
     bool attach(const QString& uname = QString(), const QString& aname = QString());
 
     uint32_t negotiatedMsize() const;
     QString  lastError() const;
 
     // High-level named-file ops
+    // @p maxChunk (0 = unlimited) caps the count of each individual Tread —
+    // needed for servers whose reply buffer is smaller than the negotiated
+    // msize (the estyx firmware corrupts payloads past ~2 KB per message).
     bool writePath(const QString& path, const QByteArray& data);
-    bool readPath(const QString& path, QByteArray& out, int maxBytes = 65536);
+    bool readPath(const QString& path, QByteArray& out, int maxBytes = 65536,
+                  uint32_t maxChunk = 0);
 
     // Low-level primitives
     bool walkTo(const QString& path, uint32_t& outFid);
@@ -43,8 +50,10 @@ private:
     ITransport* m_transport;
     int         m_timeoutMs;
     uint32_t    m_msize    = 8192;
-    uint32_t    m_rootFid  = 0;
-    uint32_t    m_nextFid  = 1;   // rootFid+1
+    // Root fid 1 matches the verified reference client. The estyx firmware
+    // stores fids in a `short` table; fid 0 is untested on hardware — avoid it.
+    uint32_t    m_rootFid  = 1;
+    uint32_t    m_nextFid  = 2;   // rootFid+1
     uint16_t    m_nextTag  = 1;   // 0xFFFF reserved for Tversion (kNoTag)
     QString     m_lastError;
 };

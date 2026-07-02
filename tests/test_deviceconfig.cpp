@@ -22,6 +22,26 @@ private slots:
         QCOMPARE(rt.biasEnabled(), d.biasEnabled());
     }
 
+    // Internal test signal (ADS1299 datasheet + verified on hardware):
+    // CONFIG2 = 0xD0 (INT_CAL=1) enables the on-chip ±1.875 mV square wave;
+    // the default 0xC0 leaves it off. Round-trips through register bytes.
+    void internalTestSignal()
+    {
+        DeviceConfig d;
+        QCOMPARE(int(d.toRegisterBytes()[1]), 0xC0);
+        QVERIFY(!d.internalTestSignal());
+
+        const DeviceConfig t = d.withInternalTestSignal(true);
+        QCOMPARE(int(t.toRegisterBytes()[1]), 0xD0);
+        QVERIFY(t.internalTestSignal());
+        QVERIFY(!d.internalTestSignal());   // original unchanged (immutable)
+
+        const auto rt = DeviceConfig::fromRegisterBytes(t.toRegisterBytes());
+        QVERIFY(rt.internalTestSignal());
+
+        QVERIFY(t.toJson().contains(QStringLiteral("testSignal")));
+    }
+
     // Field-level encoding correctness.
     void encodings()
     {

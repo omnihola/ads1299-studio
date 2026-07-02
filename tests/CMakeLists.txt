@@ -129,6 +129,28 @@ set_target_properties(test_ads1299record PROPERTIES AUTOMOC ON)
 target_link_libraries(test_ads1299record PRIVATE studio_core Qt6::Test)
 add_test(NAME ads1299record COMMAND test_ads1299record)
 
+add_executable(test_ads1299wordparser test_ads1299wordparser.cpp)
+set_target_properties(test_ads1299wordparser PROPERTIES AUTOMOC ON)
+target_link_libraries(test_ads1299wordparser PRIVATE studio_core Qt6::Test)
+add_test(NAME test_ads1299wordparser COMMAND test_ads1299wordparser)
+
+add_executable(test_mmb0bootloader test_mmb0bootloader.cpp)
+set_target_properties(test_mmb0bootloader PROPERTIES AUTOMOC ON)
+target_link_libraries(test_mmb0bootloader PRIVATE studio_core Qt6::Test)
+add_test(NAME test_mmb0bootloader COMMAND test_mmb0bootloader)
+
+add_executable(test_mainwindowgating test_mainwindowgating.cpp)
+set_target_properties(test_mainwindowgating PROPERTIES AUTOMOC ON)
+target_link_libraries(test_mainwindowgating PRIVATE studio_ui Qt6::Test)
+add_test(NAME test_mainwindowgating COMMAND test_mainwindowgating)
+set_tests_properties(test_mainwindowgating PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_mmb0live test_mmb0live.cpp)
+set_target_properties(test_mmb0live PROPERTIES AUTOMOC ON)
+target_link_libraries(test_mmb0live PRIVATE studio_core Qt6::Test)
+add_test(NAME test_mmb0live COMMAND test_mmb0live)
+set_tests_properties(test_mmb0live PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(test_mmb0datasource test_mmb0datasource.cpp)
 set_target_properties(test_mmb0datasource PROPERTIES AUTOMOC ON)
 target_link_libraries(test_mmb0datasource PRIVATE studio_core Qt6::Test)

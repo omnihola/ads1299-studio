@@ -16,7 +16,11 @@ namespace studio::mmb0 {
 /// Bulk OUT  → EP 0x01 (host→device, packet size 64 B)
 /// Bulk IN   → EP 0x81 (device→host, packet size 64 B)
 ///
-/// send() zero-pads the outgoing buffer to a multiple of 64.
+/// send() transmits EXACTLY the message bytes (no padding — extra zeros would
+/// be read by the estyx deframer as the next message's size field) and, when
+/// the length is an exact multiple of the 64-byte packet size, terminates the
+/// transfer with a zero-length packet. This matches the verified reference
+/// client behavior.
 /// recv() uses MessageDeframer to reassemble 9P frames that may span
 /// several 64-byte USB packets.
 class Mmb0UsbTransport : public studio::styx::ITransport {
@@ -43,13 +47,18 @@ public:
     bool isOpen() const;
 
     /// Human-readable description of the most recent error.
-    QString lastError() const;
+    QString lastError() const override;
+
+    /// True when a bulk transfer of @p len bytes must be followed by a
+    /// zero-length packet so the device sees the end of the transfer
+    /// (i.e. len is a positive multiple of the 64-byte packet size).
+    static bool needsZlp(int len);
 
     // ── ITransport ──────────────────────────────────────────────────────────
 
-    /// Send one fully-framed 9P T-message over EP 0x01.
-    /// The payload is zero-padded to the next multiple of 64 bytes before
-    /// transmission.  Returns false on transfer error.
+    /// Send one fully-framed 9P T-message over EP 0x01 — exact bytes, no
+    /// padding, plus a terminating ZLP when needsZlp(msg.size()).
+    /// Returns false on transfer error.
     bool send(const QByteArray& msg) override;
 
     /// Receive one fully-framed 9P R-message from EP 0x81.

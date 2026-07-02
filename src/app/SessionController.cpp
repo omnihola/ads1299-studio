@@ -1,6 +1,7 @@
 // src/app/SessionController.cpp
 #include "app/SessionController.h"
 #include "core/acquisition/SerialSource.h"
+#include "core/acquisition/mmb0/Mmb0Bootloader.h"
 #include "core/acquisition/mmb0/Mmb0DataSource.h"
 #include "core/acquisition/mmb0/Mmb0UsbTransport.h"
 #include "core/logging/Logger.h"
@@ -193,6 +194,13 @@ void SessionController::stopStreaming()
 {
     if (state_ == State::Idle) return;
 
+    // Finalize an in-progress recording FIRST (closes the BDF and emits
+    // recordingChanged(false)). Otherwise the recorder would be left open —
+    // the UI stuck in "recording" while nothing is written — until app exit.
+    if (state_ == State::Recording) {
+        stopRecording();
+    }
+
     // Stop the source on the worker thread and then wait for it to finish.
     QMetaObject::invokeMethod(source_, &IDataSource::stop, Qt::BlockingQueuedConnection);
     workerThread_.quit();
@@ -206,7 +214,7 @@ void SessionController::stopStreaming()
 // Source swap
 // ---------------------------------------------------------------------------
 
-void SessionController::setSource(IDataSource* newSource)
+void SessionController::setSource(IDataSource* newSource, SourceType type)
 {
     Q_ASSERT(newSource);
 
@@ -242,9 +250,12 @@ void SessionController::setSource(IDataSource* newSource)
             Qt::QueuedConnection);
 
     source_ = newSource;
+    sourceType_ = type;
 
+    const QString name = newSource->capabilities().name;
     Logger::instance().log("info", "SessionController.setSource",
-                           QJsonObject{{"name", newSource->capabilities().name}});
+                           QJsonObject{{"name", name}});
+    emit sourceChanged(type, name);
 }
 
 bool SessionController::connectSerial(const QString& portName, int baud)
@@ -256,31 +267,92 @@ bool SessionController::connectSerial(const QString& portName, int baud)
                                QJsonObject{{"port", portName}});
         return false;
     }
-    setSource(serial);
+    setSource(serial, SourceType::Serial);
     Logger::instance().log("info", "SessionController.connectSerial",
                            QJsonObject{{"port", portName}, {"baud", baud}});
     return true;
 }
 
-bool SessionController::connectMmb0()
+// Ensure the board is in Styx mode (0451:5718). The board reverts to the ROM
+// bootloader (0451:9001) on every power cycle — when only the bootloader is
+// present, locate/validate the firmware image and upload it.
+// Returns false with a user-facing message in *errorOut on failure.
+bool SessionController::ensureMmb0StyxMode(QString* errorOut)
 {
-    if (!studio::mmb0::Mmb0UsbTransport::isDevicePresent()) {
+    using studio::mmb0::Mmb0Bootloader;
+
+    auto fail = [&](const QString& msg, const char* event) {
+        Logger::instance().log("warn", event, QJsonObject{{"error", msg}});
+        if (errorOut) *errorOut = msg;
+        return false;
+    };
+
+    if (Mmb0Bootloader::isStyxPresent())
+        return true;
+
+    if (!Mmb0Bootloader::isBootloaderPresent()) {
         Logger::instance().log("info", "SessionController.connectMmb0.noDevice",
-                               QJsonObject{{"vid", "0x0451"}, {"pid", "0x5718"}});
+                               QJsonObject{{"vid", "0x0451"},
+                                           {"pid", "0x5718/0x9001"}});
+        if (errorOut)
+            *errorOut = QStringLiteral(
+                "No MMB0 device found (neither 0451:5718 nor 0451:9001)");
         return false;
     }
 
+    const QString fw =
+        Mmb0Bootloader::locateFirmware(Mmb0Bootloader::defaultCandidates());
+    QString detail;
+    const auto status = Mmb0Bootloader::validateFirmware(fw, &detail);
+    switch (status) {
+    case Mmb0Bootloader::FirmwareStatus::Ok:
+        break;
+    case Mmb0Bootloader::FirmwareStatus::UnknownImage:
+        // Not the known release image — a wrong image just fails to boot
+        // the DSP (board stays in 9001), so proceed with a warning.
+        Logger::instance().log("warn",
+                               "SessionController.connectMmb0.unknownFirmware",
+                               QJsonObject{{"detail", detail}, {"path", fw}});
+        break;
+    default:
+        return fail(QStringLiteral(
+                        "MMB0 is in bootloader mode but no firmware image is "
+                        "available (%1). Set the \"mmb0/firmwarePath\" setting "
+                        "or ADS1299_FIRMWARE to your ads1299evm-pdk.bin.")
+                        .arg(detail),
+                    "SessionController.connectMmb0.firmwareMissing");
+    }
+
+    Mmb0Bootloader boot;
+    Logger::instance().log("info", "SessionController.connectMmb0.uploadFirmware",
+                           QJsonObject{{"path", fw}});
+    if (!boot.uploadFirmware(fw))
+        return fail(QStringLiteral("Firmware upload failed: %1").arg(boot.lastError()),
+                    "SessionController.connectMmb0.uploadFailed");
+    if (!boot.waitForStyx())
+        return fail(QStringLiteral("Firmware uploaded but %1").arg(boot.lastError()),
+                    "SessionController.connectMmb0.reenumTimeout");
+    return true;
+}
+
+bool SessionController::connectMmb0(QString* errorOut)
+{
+    if (!ensureMmb0StyxMode(errorOut))
+        return false;
+
     auto* t = new studio::mmb0::Mmb0UsbTransport();
     if (!t->open()) {
-        Logger::instance().log("warn", "SessionController.connectMmb0.openFailed",
-                               QJsonObject{{"error", t->lastError()}});
+        const QString msg = QStringLiteral("MMB0 open failed: %1").arg(t->lastError());
         delete t;
+        Logger::instance().log("warn", "SessionController.connectMmb0.openFailed",
+                               QJsonObject{{"error", msg}});
+        if (errorOut) *errorOut = msg;
         return false;
     }
 
     auto* src = new studio::mmb0::Mmb0DataSource(t); // src takes ownership of t
     src->setConfig(config_);
-    setSource(src);
+    setSource(src, SourceType::Mmb0);
     Logger::instance().log("info", "SessionController.connectMmb0.connected", {});
     return true;
 }

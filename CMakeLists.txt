@@ -45,10 +45,15 @@ target_include_directories(studio_core PUBLIC ${LIBUSB_INCLUDE_DIRS})
 target_link_libraries(studio_core PUBLIC ${LIBUSB_LINK_LIBRARIES})
 target_link_directories(studio_core PUBLIC ${LIBUSB_LIBRARY_DIRS})
 
-# UI sources
+# UI library — shared by the app executable and GUI tests (e.g. MainWindow
+# control-gating tests), so UI classes compile once.
 file(GLOB_RECURSE UI_SOURCES CONFIGURE_DEPENDS src/ui/*.cpp)
-qt_add_executable(ads1299-studio src/main.cpp ${UI_SOURCES} resources/resources.qrc)
-target_link_libraries(ads1299-studio PRIVATE studio_core qcustomplot Qt6::Widgets Qt6::OpenGLWidgets Qt6::OpenGL)
+add_library(studio_ui STATIC ${UI_SOURCES})
+target_include_directories(studio_ui PUBLIC src)
+target_link_libraries(studio_ui PUBLIC studio_core qcustomplot Qt6::Widgets Qt6::OpenGLWidgets Qt6::OpenGL)
+
+qt_add_executable(ads1299-studio src/main.cpp resources/resources.qrc)
+target_link_libraries(ads1299-studio PRIVATE studio_ui)
 
 enable_testing()
 add_subdirectory(tests)
